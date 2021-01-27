@@ -156,7 +156,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 				slider
 					.setDynamicTooltip()
 					.setValue(this.plugin.settings.numLinesToCheck)
-					.setLimits(1, 5, 1)
+					.setLimits(1, 10, 1)
 					.onChange(async (value) => {
 						this.plugin.settings.numLinesToCheck = value;
 						await this.plugin.saveSettings();
