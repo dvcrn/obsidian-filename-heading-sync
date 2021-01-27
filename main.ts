@@ -1,5 +1,7 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
 
+const illegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
+
 interface LinePointer {
 	LineNumber: number;
 	Text: string;
@@ -46,8 +48,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 			return;
 		}
 
-		if (view.file.basename.trim() !== heading.Text.trim()) {
-			const newPath = view.file.path.replace(view.file.basename.trim(), heading.Text.trim());
+		const sanitizedHeading = this.sanitizeHeading(heading.Text);
+		if (this.sanitizeHeading(view.file.basename) !== sanitizedHeading) {
+			const newPath = view.file.path.replace(view.file.basename.trim(), sanitizedHeading);
 			this.app.vault.rename(view.file, newPath);
 		}
 	}
@@ -68,13 +71,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const cursor = doc.getCursor();
 
 		const foundHeading = this.findHeading(doc);
+		const sanitizedHeading = this.sanitizeHeading(file.basename);
 		if (foundHeading !== null) {
-			this.replaceLine(doc, foundHeading, `# ${file.basename}`);
-			doc.setCursor(cursor);
+			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
+				this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
+				doc.setCursor(cursor);
+			}
 			return;
 		}
 
-		this.insertLine(doc, `# ${file.basename}`);
+		this.insertLine(doc, `# ${sanitizedHeading}`);
 		doc.setCursor(cursor);
 	}
 
@@ -94,6 +100,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		}
 
 		return null;
+	}
+
+	sanitizeHeading(text: string) {
+		illegalSymbols.forEach((symbol) => {
+			text = text.replace(symbol, '');
+		});
+
+		return text.trim();
 	}
 
 	insertLine(doc: CodeMirror.Doc, text: string) {
