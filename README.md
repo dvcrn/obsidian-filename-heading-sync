@@ -2,6 +2,10 @@
 
 This is a Obsidian plugin to keep the filename and the first heading of a file in sync
 
+![demo](./demo.gif)
+
+**Note**: This plugin will overwrite your first heading at the top of the file the moment you open it, so this can be considered _destructive_.
+
 ## Features
 
 -   When renaming the current file -> will update the heading
