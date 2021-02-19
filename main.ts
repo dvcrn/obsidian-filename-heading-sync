@@ -9,10 +9,12 @@ interface LinePointer {
 
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
+	ignoredFiles: { [key: string]: null };
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
+	ignoredFiles: {},
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -21,15 +23,40 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.registerEvent(this.app.vault.on('rename', (file) => this.handleSyncFilenameToHeading(file)));
+		this.registerEvent(
+			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath)),
+		);
 		this.registerEvent(this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)));
-		this.registerEvent(this.app.workspace.on('file-open', (file) => this.handleSyncFilenameToHeading(file)));
+		this.registerEvent(
+			this.app.workspace.on('file-open', (file) => this.handleSyncFilenameToHeading(file, file.path)),
+		);
 
 		this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
+
+		this.addCommand({
+			id: 'page-heading-sync-ignore-file',
+			name: 'Ignore current file',
+			checkCallback: (checking: boolean) => {
+				let leaf = this.app.workspace.activeLeaf;
+				if (leaf) {
+					if (!checking) {
+						this.settings.ignoredFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = null;
+						this.saveSettings();
+					}
+					return true;
+				}
+				return false;
+			},
+		});
 	}
 
 	handleSyncHeadingToFile(file: TAbstractFile) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+		// if ignored, just bail
+		if (this.settings.ignoredFiles[file.path] !== undefined) {
+			return;
+		}
 
 		if (view === null) {
 			return;
@@ -55,8 +82,21 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		}
 	}
 
-	handleSyncFilenameToHeading(file) {
+	handleSyncFilenameToHeading(file, oldPath) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
+		if (this.settings.ignoredFiles[oldPath.trim()] !== undefined) {
+			// if filename didn't change, just bail, nothing to do here
+			if (file.path === oldPath) {
+				return;
+			}
+
+			delete this.settings.ignoredFiles[oldPath];
+			this.settings.ignoredFiles[file.path] = null;
+			this.saveSettings();
+			return;
+		}
 
 		if (view === null) {
 			return;
@@ -129,10 +169,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 	plugin: FilenameHeadingSyncPlugin;
+	app: App;
 
 	constructor(app: App, plugin: FilenameHeadingSyncPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+		this.app = app;
 	}
 
 	display(): void {
@@ -162,5 +204,23 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+
+		containerEl.createEl('h2', { text: 'Ignored files' });
+		containerEl.createEl('p', {
+			text: 'You can ignore files from this plugin by using the "ignore this file" command',
+		});
+
+		// go over all ignored files and add them
+		for (let key in this.plugin.settings.ignoredFiles) {
+			const ignoredFilesSettingsObj = new Setting(containerEl).setDesc(key);
+
+			ignoredFilesSettingsObj.addButton((button) => {
+				button.setButtonText('Delete').onClick(async () => {
+					delete this.plugin.settings.ignoredFiles[key];
+					await this.plugin.saveSettings();
+					this.display();
+				});
+			});
+		}
 	}
 }
