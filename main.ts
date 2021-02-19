@@ -51,7 +51,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const sanitizedHeading = this.sanitizeHeading(heading.Text);
 		if (this.sanitizeHeading(view.file.basename) !== sanitizedHeading) {
 			const newPath = view.file.path.replace(view.file.basename.trim(), sanitizedHeading);
-			this.app.vault.rename(view.file, newPath);
+			this.app.fileManager.renameFile(view.file, newPath);
 		}
 	}
 
