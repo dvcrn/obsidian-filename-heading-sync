@@ -6,6 +6,8 @@ This is a Obsidian plugin to keep the filename and the first heading of a file i
 
 **Note**: This plugin will overwrite your first heading at the top of the file the moment you open it, so this can be considered _destructive_.
 
+Discussion on the obsidian forum [here](https://forum.obsidian.md/t/plugin-for-keeping-the-filename-and-first-heading-of-a-file-in-sync/12042)
+
 ## Features
 
 -   When renaming the current file -> will update the heading
