@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	ignoredFiles: {},
 };
 
+const TITLE_OFFSET_FROM_END_OF_FRONTMATTER = 2
+
 export default class FilenameHeadingSyncPlugin extends Plugin {
 	settings: FilenameHeadingSyncPluginSettings;
 
@@ -135,8 +137,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	findHeading(doc: CodeMirror.Doc, searchStartLine: number): LinePointer | null {
-
-		for (let i = searchStartLine; i <= this.settings.numLinesToCheck; i++) {
+		for (let i = searchStartLine; i <= this.settings.numLinesToCheck + searchStartLine + TITLE_OFFSET_FROM_END_OF_FRONTMATTER; i++) {
 			const line = doc.getLine(i);
 			if (line === undefined) {
 				continue;
@@ -162,12 +163,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	insertLine(doc: CodeMirror.Doc, text: string, frontMatterEndLocation:number) {
-		const TITLE_OFFSET_FROM_END_OF_FRONTMATTER = 2
 		doc.replaceRange(`${text}\n`,
 										 { line: frontMatterEndLocation + TITLE_OFFSET_FROM_END_OF_FRONTMATTER, ch: 0 },
 										 { line: frontMatterEndLocation + TITLE_OFFSET_FROM_END_OF_FRONTMATTER, ch: 0 });
 	}
 
+	replaceLine(doc: CodeMirror.Doc, line: LinePointer, text: string) {
+		doc.replaceRange(`${text}\n`,
+										 { line: line.LineNumber + TITLE_OFFSET_FROM_END_OF_FRONTMATTER, ch: 0 },
+										 { line: line.LineNumber + TITLE_OFFSET_FROM_END_OF_FRONTMATTER + 1, ch: 0 });
+	}
 	private frontMatterEndLocation(file: TFile) {
 		const metadataCache = this.app.metadataCache
 		const fileMetaData = metadataCache.getFileCache(file)
@@ -180,9 +185,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		return searchStartLine
 	}
 
-	replaceLine(doc: CodeMirror.Doc, line: LinePointer, text: string) {
-		doc.replaceRange(`${text}\n`, { line: line.LineNumber, ch: 0 }, { line: line.LineNumber + 1, ch: 0 });
-	}
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
