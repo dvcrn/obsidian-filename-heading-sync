@@ -1,4 +1,6 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
+import {
+	App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile, TFile
+} from 'obsidian';
 
 const illegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 
@@ -68,7 +70,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 		const editor = view.sourceMode.cmEditor;
 		const doc = editor.getDoc();
-		const heading = this.findHeading(doc);
+		const heading = this.findHeading(doc, view.file);
 
 		// no heading found, nothing to do here
 		if (heading == null) {
@@ -82,7 +84,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		}
 	}
 
-	handleSyncFilenameToHeading(file, oldPath) {
+	handleSyncFilenameToHeading(file: TAbstractFile, oldPath) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
@@ -106,12 +108,20 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 			return;
 		}
 
+		if ( !view.file.basename ) {
+			return;
+		}
+
+		const concreteFile = file as TFile
+
 		const editor = view.sourceMode.cmEditor;
 		const doc = editor.getDoc();
 		const cursor = doc.getCursor();
 
-		const foundHeading = this.findHeading(doc);
-		const sanitizedHeading = this.sanitizeHeading(file.basename);
+		const frontMatterEnd = this.frontMatterEndLocation(concreteFile)
+
+		const foundHeading = this.findHeading(doc, frontMatterEnd);
+		const sanitizedHeading = this.sanitizeHeading(concreteFile.basename);
 		if (foundHeading !== null) {
 			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
 				this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
@@ -120,12 +130,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 			return;
 		}
 
-		this.insertLine(doc, `# ${sanitizedHeading}`);
+		this.insertLine(doc, `# ${sanitizedHeading}`, frontMatterEnd);
 		doc.setCursor(cursor);
 	}
 
-	findHeading(doc: CodeMirror.Doc): LinePointer | null {
-		for (let i = 0; i <= this.settings.numLinesToCheck; i++) {
+	findHeading(doc: CodeMirror.Doc, searchStartLine: number): LinePointer | null {
+
+		for (let i = searchStartLine; i <= this.settings.numLinesToCheck; i++) {
 			const line = doc.getLine(i);
 			if (line === undefined) {
 				continue;
@@ -150,8 +161,23 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		return text.trim();
 	}
 
-	insertLine(doc: CodeMirror.Doc, text: string) {
-		doc.replaceRange(`${text}\n`, { line: 0, ch: 0 }, { line: 0, ch: 0 });
+	insertLine(doc: CodeMirror.Doc, text: string, frontMatterEndLocation:number) {
+		const TITLE_OFFSET_FROM_END_OF_FRONTMATTER = 2
+		doc.replaceRange(`${text}\n`,
+										 { line: frontMatterEndLocation + TITLE_OFFSET_FROM_END_OF_FRONTMATTER, ch: 0 },
+										 { line: frontMatterEndLocation + TITLE_OFFSET_FROM_END_OF_FRONTMATTER, ch: 0 });
+	}
+
+	private frontMatterEndLocation(file: TFile) {
+		const metadataCache = this.app.metadataCache
+		const fileMetaData = metadataCache.getFileCache(file)
+		const frontMatterPosition = fileMetaData?.frontmatter?.position
+
+		let searchStartLine = 0
+		if ( frontMatterPosition ) {
+			searchStartLine = frontMatterPosition.end.line
+		}
+		return searchStartLine
 	}
 
 	replaceLine(doc: CodeMirror.Doc, line: LinePointer, text: string) {
