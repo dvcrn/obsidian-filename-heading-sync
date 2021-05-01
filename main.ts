@@ -1,6 +1,7 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
 
-const illegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
+const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
+let combinedIllegalSymbols: string[];
 
 interface LinePointer {
 	LineNumber: number;
@@ -9,11 +10,13 @@ interface LinePointer {
 
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
+	userIllegalSymbols: string[];
 	ignoredFiles: { [key: string]: null };
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
+	userIllegalSymbols: [],
 	ignoredFiles: {},
 };
 
@@ -22,7 +25,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
+		
 		this.registerEvent(
 			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath)),
 		);
@@ -143,10 +146,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	sanitizeHeading(text: string) {
-		illegalSymbols.forEach((symbol) => {
+		combinedIllegalSymbols = [...stockIllegalSymbols, ...this.settings.userIllegalSymbols];
+		console.log(combinedIllegalSymbols)
+		combinedIllegalSymbols.forEach((symbol) => {
 			text = text.replace(symbol, '');
 		});
-
 		return text.trim();
 	}
 
@@ -203,8 +207,21 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 						this.plugin.settings.numLinesToCheck = value;
 						await this.plugin.saveSettings();
 					}),
-			);
-
+		);
+		
+		new Setting(containerEl)
+			.setName('Custom Illegal Charaters')
+			.setDesc('Type charaters seperated by a comma')
+			.addText((text) =>
+			text
+			  .setPlaceholder("[],#,...")
+			  .setValue(this.plugin.settings.userIllegalSymbols.join())
+					.onChange(async (value) => {
+						this.plugin.settings.userIllegalSymbols = value.split(",");
+				  await this.plugin.saveSettings();
+			  })
+		  );
+		
 		containerEl.createEl('h2', { text: 'Ignored files' });
 		containerEl.createEl('p', {
 			text: 'You can ignore files from this plugin by using the "ignore this file" command',
