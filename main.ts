@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile} from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TFile, TAbstractFile} from 'obsidian';
 
 const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 
@@ -26,7 +26,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		await this.loadSettings();
 		
 		this.registerEvent(
-			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath)),
+			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath))
 		);
 		this.registerEvent(this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)));
 		this.registerEvent(
@@ -53,6 +53,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	handleSyncHeadingToFile(file: TAbstractFile) {
+		if (!(file instanceof TFile)) {
+			console.log("Here")
+			return;
+		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if ignored, just bail
@@ -85,6 +89,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
+		if (!(file instanceof TFile)) {
+			console.log("Here")
+			return;
+		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
@@ -113,7 +121,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const cursor = doc.getCursor();
 
 		const foundHeading = this.findHeading(doc);
-		const sanitizedHeading = this.sanitizeHeading(file.name.split('.').slice(0, -1).join('.')); //Removes extension
+		const sanitizedHeading = this.sanitizeHeading(file.basename); 
 		
 		if (foundHeading !== null) {
 			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
