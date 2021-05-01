@@ -209,8 +209,8 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 		);
 		
 		new Setting(containerEl)
-			.setName('Custom Illegal Charaters')
-			.setDesc('Type charaters seperated by a comma')
+			.setName('Custom Illegal Charaters/Strings')
+			.setDesc('Type charaters/strings seperated by a comma. This input is space sensitive.')
 			.addText((text) =>
 			text
 			  .setPlaceholder("[],#,...")
