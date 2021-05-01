@@ -1,7 +1,6 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile} from 'obsidian';
 
 const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
-let combinedIllegalSymbols: string[];
 
 interface LinePointer {
 	LineNumber: number;
@@ -147,7 +146,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	sanitizeHeading(text: string) {
-		combinedIllegalSymbols = [...stockIllegalSymbols, ...this.settings.userIllegalSymbols];
+		let combinedIllegalSymbols = [...stockIllegalSymbols, ...this.settings.userIllegalSymbols];
 		combinedIllegalSymbols.forEach((symbol) => {
 			text = text.replace(symbol, '');
 		});
