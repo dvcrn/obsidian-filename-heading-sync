@@ -10,11 +10,13 @@ interface LinePointer {
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
 	ignoredFiles: { [key: string]: null };
+	removePreamble: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
 	ignoredFiles: {},
+	removePreamble: false,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -74,8 +76,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		if (heading == null) {
 			return;
 		}
-
-		const sanitizedHeading = this.sanitizeHeading(heading.Text);
+	
+		let sanitizedHeading = this.sanitizeHeading(heading.Text);
+		if (this.settings.removePreamble == true) {
+			sanitizedHeading = view.file.basename.replace(/ .*/, '') + " " + sanitizedHeading;
+		}
 		if (this.sanitizeHeading(view.file.basename) !== sanitizedHeading) {
 			const newPath = view.file.path.replace(view.file.basename.trim(), sanitizedHeading);
 			this.app.fileManager.renameFile(view.file, newPath);
@@ -111,7 +116,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const cursor = doc.getCursor();
 
 		const foundHeading = this.findHeading(doc);
-		const sanitizedHeading = this.sanitizeHeading(file.basename);
+		let sanitizedHeading = this.sanitizeHeading(file.basename);
+		if (this.settings.removePreamble == true) {
+			sanitizedHeading = sanitizedHeading.split(' ').slice(1).join(' ')
+			console.log(sanitizedHeading);
+		}
 		if (foundHeading !== null) {
 			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
 				this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
@@ -203,7 +212,19 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 						this.plugin.settings.numLinesToCheck = value;
 						await this.plugin.saveSettings();
 					}),
-			);
+		);
+		
+		new Setting(containerEl)
+		.setName('Remove Filename Preamble')
+		.setDesc('When enabled this will remove all text before the first space when moving from filename to title')
+		.addToggle((toggle) =>
+			toggle
+				.setValue(this.plugin.settings.removePreamble)
+				.onChange(async (value) => {
+					this.plugin.settings.removePreamble = value;
+					await this.plugin.saveSettings();
+				}),
+		);
 
 		containerEl.createEl('h2', { text: 'Ignored files' });
 		containerEl.createEl('p', {
