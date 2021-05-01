@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile} from 'obsidian';
 
 const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 let combinedIllegalSymbols: string[];
@@ -43,7 +43,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 				let leaf = this.app.workspace.activeLeaf;
 				if (leaf) {
 					if (!checking) {
-						this.settings.ignoredFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = null;
+						this.settings.ignoredFiles[this.app.workspace.getActiveFile().path] = null;
 						this.saveSettings();
 					}
 					return true;
@@ -85,7 +85,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		}
 	}
 
-	handleSyncFilenameToHeading(file, oldPath) {
+	handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
@@ -114,7 +114,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const cursor = doc.getCursor();
 
 		const foundHeading = this.findHeading(doc);
-		const sanitizedHeading = this.sanitizeHeading(file.basename);
+		const sanitizedHeading = this.sanitizeHeading(file.name.split('.').slice(0, -1).join('.')); //Removes extension
+		
 		if (foundHeading !== null) {
 			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
 				this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
@@ -147,7 +148,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 	sanitizeHeading(text: string) {
 		combinedIllegalSymbols = [...stockIllegalSymbols, ...this.settings.userIllegalSymbols];
-		console.log(combinedIllegalSymbols)
 		combinedIllegalSymbols.forEach((symbol) => {
 			text = text.replace(symbol, '');
 		});
