@@ -56,23 +56,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 				return false;
 			},
 		});
-
-		this.addCommand({
-			id: 'page-heading-convert-to-selected',
-			name: 'Updates File Database to Version',
-			checkCallback: (checking: boolean) => {
-				let leaf = this.app.workspace.activeLeaf;
-				if (leaf) {
-					if (!checking) {
-						this.convertedIgnoredToSelected();
-						new Notice("Update Complete");
-					}
-					return true;
-				}
-				return false;
-			},
-		});
-		
 		this.convertedIgnoredToSelected();
 	}
 
@@ -80,7 +63,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		//Converts ignores to selected files
 		for (const key in this.settings.ignoredFiles){
 			this.settings.selectedFiles[key] = true;
-			delete this.settings.ignoredFiles[key];
 		}
 		this.saveSettings();
 	}
