@@ -1,5 +1,8 @@
 import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
 
+const ignore = false;
+const sync = true;
+
 const illegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 
 interface LinePointer {
@@ -9,12 +12,14 @@ interface LinePointer {
 
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
-	ignoredFiles: { [key: string]: null };
+	selectedFiles: { [key: string]: boolean };
+	selectedFileAction: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
-	ignoredFiles: {},
+	selectedFiles: {},
+	selectedFileAction: false,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -34,13 +39,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
 
 		this.addCommand({
-			id: 'page-heading-sync-ignore-file',
-			name: 'Ignore current file',
+			id: 'page-heading-sync-s-file',
+			name: 'Add to Selected Files',
 			checkCallback: (checking: boolean) => {
 				let leaf = this.app.workspace.activeLeaf;
 				if (leaf) {
 					if (!checking) {
-						this.settings.ignoredFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = null;
+						this.settings.selectedFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = true;
 						this.saveSettings();
 					}
 					return true;
@@ -50,11 +55,23 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		});
 	}
 
+	checkForSync(file: TAbstractFile): boolean {
+		let selected = this.settings.selectedFiles[file.path];
+		let action = this.settings.selectedFileAction;
+		if (selected != true && action == ignore) {
+			return sync;
+		}
+		else if (selected == true && action == sync) {
+			return sync;
+		}
+		return ignore;
+	}
+
 	handleSyncHeadingToFile(file: TAbstractFile) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-
-		// if ignored, just bail
-		if (this.settings.ignoredFiles[file.path] !== undefined) {
+		
+		//If ignore, just bail
+		if (this.checkForSync(file) == ignore) {
 			return;
 		}
 
@@ -86,14 +103,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
-		if (this.settings.ignoredFiles[oldPath.trim()] !== undefined) {
+		if (this.settings.selectedFiles[oldPath.trim()] == true) {
+			
 			// if filename didn't change, just bail, nothing to do here
 			if (file.path === oldPath) {
 				return;
 			}
-
-			delete this.settings.ignoredFiles[oldPath];
-			this.settings.ignoredFiles[file.path] = null;
+			delete this.settings.selectedFiles[oldPath];
+			this.settings.selectedFiles[file.path] = true;
 			this.saveSettings();
 			return;
 		}
@@ -203,20 +220,32 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 						this.plugin.settings.numLinesToCheck = value;
 						await this.plugin.saveSettings();
 					}),
-			);
+		);
+		
+		new Setting(containerEl)
+		.setName('Selected File Action')
+		.setDesc('Disabled: Selected Files will be ignored - Enabled: Only Selected files will be synced')
+		.addToggle((toggle) =>
+			toggle
+				.setValue(this.plugin.settings.selectedFileAction)
+				.onChange(async (value) => {
+					this.plugin.settings.selectedFileAction = value;
+					await this.plugin.saveSettings();
+				}),
+		);
 
-		containerEl.createEl('h2', { text: 'Ignored files' });
+		containerEl.createEl('h2', { text: 'Selected Files' });
 		containerEl.createEl('p', {
-			text: 'You can ignore files from this plugin by using the "ignore this file" command',
+			text: 'Files in this list will either be ignored by the plugin or exclusively synced based on the above toggle. You can add selected files to this list with the "Add to Selected Files" command',
 		});
 
 		// go over all ignored files and add them
-		for (let key in this.plugin.settings.ignoredFiles) {
-			const ignoredFilesSettingsObj = new Setting(containerEl).setDesc(key);
+		for (let key in this.plugin.settings.selectedFiles) {
+			const selectedFilesSettingsObj = new Setting(containerEl).setDesc(key);
 
-			ignoredFilesSettingsObj.addButton((button) => {
+			selectedFilesSettingsObj.addButton((button) => {
 				button.setButtonText('Delete').onClick(async () => {
-					delete this.plugin.settings.ignoredFiles[key];
+					delete this.plugin.settings.selectedFiles[key];
 					await this.plugin.saveSettings();
 					this.display();
 				});
