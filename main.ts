@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile} from 'obsidian';
 
 const ignore = false;
 const sync = true;
@@ -12,12 +12,14 @@ interface LinePointer {
 
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
+	ignoredFiles: { [key: string]: null };
 	selectedFiles: { [key: string]: boolean };
 	selectedFileAction: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
+	ignoredFiles: {},
 	selectedFiles: {},
 	selectedFileAction: false,
 };
@@ -39,7 +41,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
 
 		this.addCommand({
-			id: 'page-heading-sync-s-file',
+			id: 'page-heading-sync-selected-file',
 			name: 'Add to Selected Files',
 			checkCallback: (checking: boolean) => {
 				let leaf = this.app.workspace.activeLeaf;
@@ -47,12 +49,40 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 					if (!checking) {
 						this.settings.selectedFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = true;
 						this.saveSettings();
+
+					}
+					return true
+				}
+				return false;
+			},
+		});
+
+		this.addCommand({
+			id: 'page-heading-convert-to-selected',
+			name: 'Updates File Database to Version',
+			checkCallback: (checking: boolean) => {
+				let leaf = this.app.workspace.activeLeaf;
+				if (leaf) {
+					if (!checking) {
+						this.convertedIgnoredToSelected();
+						new Notice("Update Complete");
 					}
 					return true;
 				}
 				return false;
 			},
 		});
+		
+		this.convertedIgnoredToSelected();
+	}
+
+	convertedIgnoredToSelected() {
+		//Converts ignores to selected files
+		for (const key in this.settings.ignoredFiles){
+			this.settings.selectedFiles[key] = true;
+			delete this.settings.ignoredFiles[key];
+		}
+		this.saveSettings();
 	}
 
 	checkForSync(file: TAbstractFile): boolean {
