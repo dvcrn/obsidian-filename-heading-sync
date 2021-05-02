@@ -54,21 +54,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 	handleSyncHeadingToFile(file: TAbstractFile) {
 		if (!(file instanceof TFile)) {
-			console.log("Here")
 			return;
 		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if ignored, just bail
 		if (this.settings.ignoredFiles[file.path] !== undefined) {
-			return;
-		}
-
-		if (view === null) {
-			return;
-		}
-
-		if (view.file !== file) {
 			return;
 		}
 
@@ -105,14 +96,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 			delete this.settings.ignoredFiles[oldPath];
 			this.settings.ignoredFiles[file.path] = null;
 			this.saveSettings();
-			return;
-		}
-
-		if (view === null) {
-			return;
-		}
-
-		if (view.file !== file) {
 			return;
 		}
 
