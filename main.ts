@@ -1,6 +1,6 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TAbstractFile } from 'obsidian';
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, EventRef, MarkdownView, TFile, TAbstractFile} from 'obsidian';
 
-const illegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
+const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 
 interface LinePointer {
 	LineNumber: number;
@@ -9,11 +9,13 @@ interface LinePointer {
 
 interface FilenameHeadingSyncPluginSettings {
 	numLinesToCheck: number;
+	userIllegalSymbols: string[];
 	ignoredFiles: { [key: string]: null };
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 	numLinesToCheck: 1,
+	userIllegalSymbols: [],
 	ignoredFiles: {},
 };
 
@@ -22,9 +24,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
+		
 		this.registerEvent(
-			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath)),
+			this.app.vault.on('rename', (file, oldPath) => this.handleSyncFilenameToHeading(file, oldPath))
 		);
 		this.registerEvent(this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)));
 		this.registerEvent(
@@ -40,7 +42,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 				let leaf = this.app.workspace.activeLeaf;
 				if (leaf) {
 					if (!checking) {
-						this.settings.ignoredFiles[this.app.workspace.activeLeaf.view.file.path.trim()] = null;
+						this.settings.ignoredFiles[this.app.workspace.getActiveFile().path] = null;
 						this.saveSettings();
 					}
 					return true;
@@ -51,18 +53,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	handleSyncHeadingToFile(file: TAbstractFile) {
+		if (!(file instanceof TFile)) {
+			return;
+		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if ignored, just bail
 		if (this.settings.ignoredFiles[file.path] !== undefined) {
-			return;
-		}
-
-		if (view === null) {
-			return;
-		}
-
-		if (view.file !== file) {
 			return;
 		}
 
@@ -82,7 +79,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 		}
 	}
 
-	handleSyncFilenameToHeading(file, oldPath) {
+	handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
+		if (!(file instanceof TFile)) {
+			console.log("Here")
+			return;
+		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
 		// if oldpath is ignored, hook in and update the new filepath to be ignored instead
@@ -98,20 +99,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 			return;
 		}
 
-		if (view === null) {
-			return;
-		}
-
-		if (view.file !== file) {
-			return;
-		}
-
 		const editor = view.sourceMode.cmEditor;
 		const doc = editor.getDoc();
 		const cursor = doc.getCursor();
 
 		const foundHeading = this.findHeading(doc);
-		const sanitizedHeading = this.sanitizeHeading(file.basename);
+		const sanitizedHeading = this.sanitizeHeading(file.basename); 
+		
 		if (foundHeading !== null) {
 			if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
 				this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
@@ -143,10 +137,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 	}
 
 	sanitizeHeading(text: string) {
-		illegalSymbols.forEach((symbol) => {
+		let combinedIllegalSymbols = [...stockIllegalSymbols, ...this.settings.userIllegalSymbols];
+		combinedIllegalSymbols.forEach((symbol) => {
 			text = text.replace(symbol, '');
 		});
-
 		return text.trim();
 	}
 
@@ -203,8 +197,21 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 						this.plugin.settings.numLinesToCheck = value;
 						await this.plugin.saveSettings();
 					}),
-			);
-
+		);
+		
+		new Setting(containerEl)
+			.setName('Custom Illegal Charaters/Strings')
+			.setDesc('Type charaters/strings seperated by a comma. This input is space sensitive.')
+			.addText((text) =>
+			text
+			  .setPlaceholder("[],#,...")
+			  .setValue(this.plugin.settings.userIllegalSymbols.join())
+					.onChange(async (value) => {
+						this.plugin.settings.userIllegalSymbols = value.split(",");
+				  await this.plugin.saveSettings();
+			  })
+		  );
+		
 		containerEl.createEl('h2', { text: 'Ignored files' });
 		containerEl.createEl('p', {
 			text: 'You can ignore files from this plugin by using the "ignore this file" command',
