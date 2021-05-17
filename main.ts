@@ -73,6 +73,25 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     });
   }
 
+  fileIsIgnored(path: string): boolean {
+    // check manual ignore
+    if (this.settings.ignoredFiles[path] !== undefined) {
+      return true;
+    }
+
+    // check regex
+    try {
+      if (this.settings.ignoreRegex === '') {
+        return;
+      }
+
+      const reg = new RegExp(this.settings.ignoreRegex);
+      return reg.exec(path) !== null;
+    } catch {}
+
+    return false;
+  }
+
   handleSyncHeadingToFile(file: TAbstractFile) {
     if (!(file instanceof TFile)) {
       return;
@@ -80,7 +99,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
     // if ignored, just bail
-    if (this.settings.ignoredFiles[file.path] !== undefined) {
+    if (this.fileIsIgnored(file.path)) {
       return;
     }
 
@@ -110,15 +129,19 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 
     // if oldpath is ignored, hook in and update the new filepath to be ignored instead
-    if (this.settings.ignoredFiles[oldPath.trim()] !== undefined) {
+    if (this.fileIsIgnored(oldPath.trim())) {
       // if filename didn't change, just bail, nothing to do here
       if (file.path === oldPath) {
         return;
       }
 
-      delete this.settings.ignoredFiles[oldPath];
-      this.settings.ignoredFiles[file.path] = null;
-      this.saveSettings();
+      // If filepath changed and the file was in the ignore list before,
+      // remove it from the list and add the new one instead
+      if (this.settings.ignoredFiles[oldPath]) {
+        delete this.settings.ignoredFiles[oldPath];
+        this.settings.ignoredFiles[file.path] = null;
+        this.saveSettings();
+      }
       return;
     }
 
