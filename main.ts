@@ -21,6 +21,7 @@ interface LinePointer {
 interface FilenameHeadingSyncPluginSettings {
   numLinesToCheck: number;
   userIllegalSymbols: string[];
+  ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
 }
 
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   numLinesToCheck: 1,
   userIllegalSymbols: [],
   ignoredFiles: {},
+  ignoreRegex: '',
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -201,6 +203,29 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
   display(): void {
     let { containerEl } = this;
+    let regexIgnoredFilesDiv: HTMLDivElement;
+
+    const renderRegexIgnoredFiles = (div: HTMLElement) => {
+      // empty existing div
+      div.innerHTML = '';
+
+      if (this.plugin.settings.ignoreRegex === '') {
+        return;
+      }
+
+      try {
+        const files = this.app.vault.getFiles();
+        const reg = new RegExp(this.plugin.settings.ignoreRegex);
+
+        files
+          .filter((file) => reg.exec(file.path) !== null)
+          .forEach((el) => {
+            new Setting(div).setDesc(el.path);
+          });
+      } catch (e) {
+        return;
+      }
+    };
 
     containerEl.empty();
 
@@ -243,7 +268,37 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl('h2', { text: 'Ignored files' });
+    new Setting(containerEl)
+      .setName('Ignore Regex Rule')
+      .setDesc(
+        'Ignore rule in RegEx format. All files listed below will get ignored by this plugin.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('MyFolder/.*')
+          .setValue(this.plugin.settings.ignoreRegex)
+          .onChange(async (value) => {
+            try {
+              new RegExp(value);
+              this.plugin.settings.ignoreRegex = value;
+            } catch {
+              this.plugin.settings.ignoreRegex = '';
+            }
+
+            await this.plugin.saveSettings();
+            renderRegexIgnoredFiles(regexIgnoredFilesDiv);
+          }),
+      );
+
+    containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
+    containerEl.createEl('p', {
+      text: 'All files matching the above RegEx will get listed here',
+    });
+
+    regexIgnoredFilesDiv = containerEl.createDiv('test');
+    renderRegexIgnoredFiles(regexIgnoredFilesDiv);
+
+    containerEl.createEl('h2', { text: 'Manually Ignored Files' });
     containerEl.createEl('p', {
       text:
         'You can ignore files from this plugin by using the "ignore this file" command',
