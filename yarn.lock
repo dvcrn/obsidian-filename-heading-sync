@@ -214,8 +214,8 @@ moment@2.29.1:
   integrity sha512-kHmoybcPV8Sqy59DwNDY3Jefr64lK/by/da0ViFcuA4DH0vQg5Q6Ze5VimxkfQNSC+Mls/Kx53s7TjP1RhFEDQ==
 
 "obsidian@https://github.com/obsidianmd/obsidian-api/tarball/master":
-  version "0.12.2"
-  resolved "https://github.com/obsidianmd/obsidian-api/tarball/master#ba2c41178aaf446b0a1d4a8b690660f9cf90130e"
+  version "0.12.6"
+  resolved "https://github.com/obsidianmd/obsidian-api/tarball/master#c64ae4a28b858a6b2b5ac10b38e6d7053fd8f536"
   dependencies:
     "@types/codemirror" "0.0.108"
     moment "2.29.1"
