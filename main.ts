@@ -20,14 +20,12 @@ interface LinePointer {
 }
 
 interface FilenameHeadingSyncPluginSettings {
-  numLinesToCheck: number;
   userIllegalSymbols: string[];
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
-  numLinesToCheck: 1,
   userIllegalSymbols: [],
   ignoredFiles: {},
   ignoreRegex: '',
@@ -118,7 +116,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     const editor = view.editor;
     const doc = editor.getDoc();
-    const heading = this.findHeading(doc);
+    const docstart = this.findDocstart(doc);
+    const heading = this.findHeading(doc, docstart);
 
     // no heading found, nothing to do here
     if (heading == null) {
@@ -178,23 +177,26 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     const doc = editor.getDoc();
     const cursor = doc.getCursor();
 
-    const foundHeading = this.findHeading(doc);
+    const docstart = this.findDocstart(doc);
+
+    const foundHeading = this.findHeading(doc, docstart);
     const sanitizedHeading = this.sanitizeHeading(file.basename);
 
     if (foundHeading !== null) {
       if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
-        this.replaceLine(doc, foundHeading, `# ${sanitizedHeading}`);
+        this.replaceLine(doc, foundHeading.LineNumber, `# ${sanitizedHeading}`);
         doc.setCursor(cursor);
       }
       return;
     }
 
-    this.insertLine(doc, `# ${sanitizedHeading}`);
+    // insert with 1 line between front matter to make things nicer
+    this.insertLine(doc, docstart, `\n# ${sanitizedHeading}`);
     doc.setCursor(cursor);
   }
 
-  findHeading(doc: Editor): LinePointer | null {
-    for (let i = 0; i <= this.settings.numLinesToCheck; i++) {
+  findHeading(doc: Editor, startLine = 0): LinePointer | null {
+    for (let i = startLine; i <= doc.lastLine(); i++) {
       const line = doc.getLine(i);
       if (line === undefined) {
         continue;
@@ -211,6 +213,22 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return null;
   }
 
+  findDocstart(doc: Editor): number {
+    const start = doc.getLine(0);
+    if (start === undefined || start !== '---') {
+      return 0;
+    }
+
+    for (let i = 1; i <= doc.lastLine(); i++) {
+      if (doc.getLine(i) === '---') {
+        // found end
+        return i;
+      }
+    }
+
+    return 0;
+  }
+
   sanitizeHeading(text: string) {
     let combinedIllegalSymbols = [
       ...stockIllegalSymbols,
@@ -222,15 +240,19 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return text.trim();
   }
 
-  insertLine(doc: Editor, text: string) {
-    doc.replaceRange(`${text}\n`, { line: 0, ch: 0 }, { line: 0, ch: 0 });
-  }
-
-  replaceLine(doc: Editor, line: LinePointer, text: string) {
+  insertLine(doc: Editor, line: number, text: string) {
     doc.replaceRange(
       `${text}\n`,
-      { line: line.LineNumber, ch: 0 },
-      { line: line.LineNumber + 1, ch: 0 },
+      { line: line + 1, ch: 0 },
+      { line: line + 1, ch: 0 },
+    );
+  }
+
+  replaceLine(doc: Editor, line: number, text: string) {
+    doc.replaceRange(
+      `${text}\n`,
+      { line: line, ch: 0 },
+      { line: line + 1, ch: 0 },
     );
   }
 
@@ -288,22 +310,8 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     });
     containerEl.createEl('p', {
       text:
-        'If no header is found within the first few lines (set below), will insert a new one at the first line.',
+        'If no header is found, will insert a new one at the first line (after frontmatter).',
     });
-
-    new Setting(containerEl)
-      .setName('Number of lines to check')
-      .setDesc('How many lines from top to check for a header')
-      .addSlider((slider) =>
-        slider
-          .setDynamicTooltip()
-          .setValue(this.plugin.settings.numLinesToCheck)
-          .setLimits(1, 10, 1)
-          .onChange(async (value) => {
-            this.plugin.settings.numLinesToCheck = value;
-            await this.plugin.saveSettings();
-          }),
-      );
 
     new Setting(containerEl)
       .setName('Custom Illegal Charaters/Strings')
