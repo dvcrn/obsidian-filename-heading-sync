@@ -213,6 +213,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return null;
   }
 
+  /**
+   * Finds the start of the users document, excluding frontmatter
+   *
+   * @param      {Editor}  doc     The document
+   * @return     {number}  line when the doc starts
+   */
   findDocstart(doc: Editor): number {
     const start = doc.getLine(0);
     if (start === undefined || start !== '---') {
