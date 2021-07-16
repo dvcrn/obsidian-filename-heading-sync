@@ -130,8 +130,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       this.sanitizeHeading(view.file.basename) !== sanitizedHeading
     ) {
       const newPath = view.file.path.replace(
-        view.file.basename.trim(),
-        sanitizedHeading,
+        view.file.name.trim(),
+        `${sanitizedHeading}.${view.file.extension}`,
       );
       this.app.fileManager.renameFile(view.file, newPath);
     }
