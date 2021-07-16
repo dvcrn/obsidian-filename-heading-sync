@@ -92,11 +92,23 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return false;
   }
 
+  /**
+   * Renames the file with the first heading found
+   *
+   * @param      {TAbstractFile}  file    The file
+   */
   handleSyncHeadingToFile(file: TAbstractFile) {
     if (!(file instanceof TFile)) {
       return;
     }
+
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+    // if currently opened file is not the same as the one that fired the event, skip
+    // this is to make sure other events don't trigger this plugin
+    if (view.file !== file) {
+      return;
+    }
 
     // if ignored, just bail
     if (this.fileIsIgnored(file.path)) {
@@ -122,11 +134,24 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
   }
 
+  /**
+   * Syncs the current filename to the first heading
+   * Finds the first heading of the file, then replaces it with the filename
+   *
+   * @param      {TAbstractFile}  file     The file that fired the event
+   * @param      {string}         oldPath  The old path
+   */
   handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
     if (!(file instanceof TFile)) {
       return;
     }
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+    // if currently opened file is not the same as the one that fired the event, skip
+    // this is to make sure other events don't trigger this plugin
+    if (view.file !== file) {
+      return;
+    }
 
     // if oldpath is ignored, hook in and update the new filepath to be ignored instead
     if (this.fileIsIgnored(oldPath.trim())) {
