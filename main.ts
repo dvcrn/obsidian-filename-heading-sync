@@ -125,7 +125,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
 
     const sanitizedHeading = this.sanitizeHeading(heading.Text);
-    if (this.sanitizeHeading(view.file.basename) !== sanitizedHeading) {
+    if (
+      sanitizedHeading.length > 0 &&
+      this.sanitizeHeading(view.file.basename) !== sanitizedHeading
+    ) {
       const newPath = view.file.path.replace(
         view.file.basename.trim(),
         sanitizedHeading,
