@@ -9,6 +9,7 @@ import {
   MarkdownView,
   TFile,
   TAbstractFile,
+  Editor,
 } from 'obsidian';
 
 const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
@@ -115,7 +116,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const editor = view.sourceMode.cmEditor;
+    const editor = view.editor;
     const doc = editor.getDoc();
     const heading = this.findHeading(doc);
 
@@ -173,7 +174,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const editor = view.sourceMode.cmEditor;
+    const editor = view.editor;
     const doc = editor.getDoc();
     const cursor = doc.getCursor();
 
@@ -192,7 +193,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     doc.setCursor(cursor);
   }
 
-  findHeading(doc: CodeMirror.Doc): LinePointer | null {
+  findHeading(doc: Editor): LinePointer | null {
     for (let i = 0; i <= this.settings.numLinesToCheck; i++) {
       const line = doc.getLine(i);
       if (line === undefined) {
@@ -221,11 +222,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return text.trim();
   }
 
-  insertLine(doc: CodeMirror.Doc, text: string) {
+  insertLine(doc: Editor, text: string) {
     doc.replaceRange(`${text}\n`, { line: 0, ch: 0 }, { line: 0, ch: 0 });
   }
 
-  replaceLine(doc: CodeMirror.Doc, line: LinePointer, text: string) {
+  replaceLine(doc: Editor, line: LinePointer, text: string) {
     doc.replaceRange(
       `${text}\n`,
       { line: line.LineNumber, ch: 0 },
