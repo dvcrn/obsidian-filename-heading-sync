@@ -190,8 +190,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    // insert with 1 line between front matter to make things nicer
-    this.insertLine(doc, docstart, `\n# ${sanitizedHeading}`);
+    if (docstart > 0) {
+      this.insertLine(doc, docstart, `\n# ${sanitizedHeading}`);
+    } else {
+      this.insertLine(doc, docstart, `# ${sanitizedHeading}`);
+    }
     doc.setCursor(cursor);
   }
 
