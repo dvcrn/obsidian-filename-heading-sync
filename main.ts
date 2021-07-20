@@ -191,7 +191,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
 
     if (docstart > 0) {
-      this.insertLine(doc, docstart, `\n# ${sanitizedHeading}`);
+      this.insertLine(doc, docstart + 1, `\n# ${sanitizedHeading}`);
     } else {
       this.insertLine(doc, docstart, `# ${sanitizedHeading}`);
     }
@@ -250,11 +250,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   insertLine(doc: Editor, line: number, text: string) {
-    doc.replaceRange(
-      `${text}\n`,
-      { line: line + 1, ch: 0 },
-      { line: line + 1, ch: 0 },
-    );
+    doc.replaceRange(`${text}\n`, { line: line, ch: 0 }, { line: line, ch: 0 });
   }
 
   replaceLine(doc: Editor, line: number, text: string) {
