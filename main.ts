@@ -45,11 +45,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)),
     );
-    this.registerEvent(
-      this.app.workspace.on('file-open', (file) =>
-        this.handleSyncFilenameToHeading(file, file.path),
-      ),
-    );
 
     this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
 
