@@ -213,9 +213,10 @@ moment@2.29.1:
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.29.1.tgz#b2be769fa31940be9eeea6469c075e35006fa3d3"
   integrity sha512-kHmoybcPV8Sqy59DwNDY3Jefr64lK/by/da0ViFcuA4DH0vQg5Q6Ze5VimxkfQNSC+Mls/Kx53s7TjP1RhFEDQ==
 
-"obsidian@https://github.com/obsidianmd/obsidian-api/tarball/master":
-  version "0.12.6"
-  resolved "https://github.com/obsidianmd/obsidian-api/tarball/master#c64ae4a28b858a6b2b5ac10b38e6d7053fd8f536"
+obsidian@^0.12.11:
+  version "0.12.11"
+  resolved "https://registry.yarnpkg.com/obsidian/-/obsidian-0.12.11.tgz#c92fbbb29fc2d4732e156b41a66d4ba8d42baaab"
+  integrity sha512-Kv4m1n4nfd17FzpqHZfqFS2YZAyY+cxAUM7/5jqh1bmbPlmKoNd1XJZC7o9KvkXfTCxALiXfGRdrjHB+GUFAEA==
   dependencies:
     "@types/codemirror" "0.0.108"
     moment "2.29.1"
