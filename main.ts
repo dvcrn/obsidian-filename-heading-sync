@@ -15,8 +15,8 @@ import {
 const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
 
 interface LinePointer {
-  LineNumber: number;
-  Text: string;
+  lineNumber: number;
+  text: string;
 }
 
 interface FilenameHeadingSyncPluginSettings {
@@ -96,11 +96,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-
     // if currently opened file is not the same as the one that fired the event, skip
     // this is to make sure other events don't trigger this plugin
-    if (view.file !== file) {
+    if (this.app.workspace.getActiveFile() !== file) {
       return;
     }
 
@@ -109,27 +107,22 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const editor = view.editor;
-    const doc = editor.getDoc();
-    const docstart = this.findDocstart(doc);
-    const heading = this.findHeading(doc, docstart);
+    this.app.vault.read(file).then((data) => {
+      const lines = data.split('\n');
+      const start = this.findNoteStart(lines);
+      const heading = this.findHeading(lines, start);
 
-    // no heading found, nothing to do here
-    if (heading == null) {
-      return;
-    }
+      if (heading === null) return; // no heading found, nothing to do here
 
-    const sanitizedHeading = this.sanitizeHeading(heading.Text);
-    if (
-      sanitizedHeading.length > 0 &&
-      this.sanitizeHeading(view.file.basename) !== sanitizedHeading
-    ) {
-      const newPath = view.file.path.replace(
-        view.file.name.trim(),
-        `${sanitizedHeading}.${view.file.extension}`,
-      );
-      this.app.fileManager.renameFile(view.file, newPath);
-    }
+      const sanitizedHeading = this.sanitizeHeading(heading.text);
+      if (
+        sanitizedHeading.length > 0 &&
+        this.sanitizeHeading(file.basename) !== sanitizedHeading
+      ) {
+        const newPath = file.path.replace(file.basename, sanitizedHeading);
+        this.app.vault.rename(file, newPath);
+      }
+    });
   }
 
   /**
@@ -141,13 +134,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    */
   handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
     if (!(file instanceof TFile)) {
-      return;
-    }
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-
-    // if currently opened file is not the same as the one that fired the event, skip
-    // this is to make sure other events don't trigger this plugin
-    if (view.file !== file) {
       return;
     }
 
@@ -168,69 +154,64 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const editor = view.editor;
-    const doc = editor.getDoc();
-    const cursor = doc.getCursor();
-
-    const docstart = this.findDocstart(doc);
-
-    const foundHeading = this.findHeading(doc, docstart);
     const sanitizedHeading = this.sanitizeHeading(file.basename);
+    this.app.vault.read(file).then((data) => {
+      const lines = data.split('\n');
+      const start = this.findNoteStart(lines);
+      const heading = this.findHeading(lines, start);
 
-    if (foundHeading !== null) {
-      if (this.sanitizeHeading(foundHeading.Text) !== sanitizedHeading) {
-        this.replaceLine(doc, foundHeading.LineNumber, `# ${sanitizedHeading}`);
-        doc.setCursor(cursor);
-      }
-      return;
-    }
-
-    if (docstart > 0) {
-      this.insertLine(doc, docstart + 1, `\n# ${sanitizedHeading}`);
-    } else {
-      this.insertLine(doc, docstart, `# ${sanitizedHeading}`);
-    }
-    doc.setCursor(cursor);
-  }
-
-  findHeading(doc: Editor, startLine = 0): LinePointer | null {
-    for (let i = startLine; i <= doc.lastLine(); i++) {
-      const line = doc.getLine(i);
-      if (line === undefined) {
-        continue;
-      }
-
-      if (line.startsWith('# ')) {
-        return {
-          LineNumber: i,
-          Text: line.substring(2),
-        };
-      }
-    }
-
-    return null;
+      if (heading !== null) {
+        if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
+          this.replaceLine(
+            file,
+            lines,
+            heading.lineNumber,
+            `# ${sanitizedHeading}`,
+          );
+        }
+      } else
+        this.replaceLine(file, lines, start, `# ${sanitizedHeading}`, true);
+    });
   }
 
   /**
-   * Finds the start of the users document, excluding frontmatter
+   * Finds the start of the note file, excluding frontmatter
    *
-   * @param      {Editor}  doc     The document
-   * @return     {number}  line when the doc starts
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @returns {number} zero-based index of the starting line of the note
    */
-  findDocstart(doc: Editor): number {
-    const start = doc.getLine(0);
-    if (start === undefined || start !== '---') {
-      return 0;
-    }
-
-    for (let i = 1; i <= doc.lastLine(); i++) {
-      if (doc.getLine(i) === '---') {
-        // found end
-        return i;
+  findNoteStart(fileLines: string[]) {
+    // check for frontmatter by checking if first line is a divider ('---')
+    if (fileLines[0] === '---') {
+      // find end of frontmatter
+      // if no end is found, then it isn't really frontmatter and function will end up returning 0
+      for (let i = 1; i < fileLines.length; i++) {
+        if (fileLines[i] === '---') {
+          // end of frontmatter found, next line is start of note
+          return i + 1;
+        }
       }
     }
-
     return 0;
+  }
+
+  /**
+   * Finds the first heading of the note file
+   *
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} startLine zero-based index of the starting line of the note
+   * @returns {LinePointer | null} LinePointer to heading or null if no heading found
+   */
+  findHeading(fileLines: string[], startLine: number): LinePointer | null {
+    for (let i = startLine; i < fileLines.length; i++) {
+      if (fileLines[i].startsWith('# ')) {
+        return {
+          lineNumber: i,
+          text: fileLines[i].substring(2),
+        };
+      }
+    }
+    return null; // no heading found
   }
 
   sanitizeHeading(text: string) {
@@ -244,16 +225,37 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return text.trim();
   }
 
-  insertLine(doc: Editor, line: number, text: string) {
-    doc.replaceRange(`${text}\n`, { line: line, ch: 0 }, { line: line, ch: 0 });
-  }
-
-  replaceLine(doc: Editor, line: number, text: string) {
-    doc.replaceRange(
-      `${text}\n`,
-      { line: line, ch: 0 },
-      { line: line + 1, ch: 0 },
-    );
+  /**
+   * Modifies the file by replacing a particular line with new text.
+   *
+   * The function will add a newline character at the end of the replaced line.
+   *
+   * If the lineNumber parameter is higher than the index of the last line of the file
+   * the function will add a newline character to the current last line and append a new
+   * line at the end of the file with the new text (essentially a new last line).
+   *
+   * @param {TFile} file the file to modify
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} lineNumber zero-based index of the line to replace
+   * @param {string} text the new text
+   * @param {boolean} insertInstead if line should be inserted instead of replaced
+   */
+  replaceLine(
+    file: TFile,
+    fileLines: string[],
+    lineNumber: number,
+    text: string,
+    insertInstead: boolean = false,
+  ) {
+    if (lineNumber >= fileLines.length) {
+      fileLines.push(text + '\n');
+    } else {
+      if (insertInstead) {
+        fileLines.splice(lineNumber, 0, text);
+      } else fileLines[lineNumber] = text;
+    }
+    const data = fileLines.join('\n');
+    this.app.vault.modify(file, data);
   }
 
   async loadSettings() {
