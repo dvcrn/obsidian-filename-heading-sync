@@ -162,15 +162,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       if (heading !== null) {
         if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
-          this.replaceLine(
+          this.replaceLineInFile(
             file,
             lines,
             heading.lineNumber,
             `# ${sanitizedHeading}`,
           );
         }
-      } else
-        this.replaceLine(file, lines, start, `# ${sanitizedHeading}`, true);
+      } else this.insertLineInFile(file, lines, start, `# ${sanitizedHeading}`);
     });
   }
 
@@ -230,7 +229,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    *
    * The function will add a newline character at the end of the replaced line.
    *
-   * If the lineNumber parameter is higher than the index of the last line of the file
+   * If the `lineNumber` parameter is higher than the index of the last line of the file
    * the function will add a newline character to the current last line and append a new
    * line at the end of the file with the new text (essentially a new last line).
    *
@@ -238,21 +237,42 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {string[]} fileLines array of the file's contents, line by line
    * @param {number} lineNumber zero-based index of the line to replace
    * @param {string} text the new text
-   * @param {boolean} insertInstead if line should be inserted instead of replaced
    */
-  replaceLine(
+  replaceLineInFile(
     file: TFile,
     fileLines: string[],
     lineNumber: number,
     text: string,
-    insertInstead: boolean = false,
   ) {
     if (lineNumber >= fileLines.length) {
       fileLines.push(text + '\n');
     } else {
-      if (insertInstead) {
-        fileLines.splice(lineNumber, 0, text);
-      } else fileLines[lineNumber] = text;
+      fileLines[lineNumber] = text;
+    }
+    const data = fileLines.join('\n');
+    this.app.vault.modify(file, data);
+  }
+
+  /**
+   * Modifies the file by inserting a line with specified text.
+   *
+   * The function will add a newline character at the end of the inserted line.
+   *
+   * @param {TFile} file the file to modify
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} lineNumber zero-based index of where the line should be inserted
+   * @param {string} text the text that the line shall contain
+   */
+  insertLineInFile(
+    file: TFile,
+    fileLines: string[],
+    lineNumber: number,
+    text: string,
+  ) {
+    if (lineNumber >= fileLines.length) {
+      fileLines.push(text + '\n');
+    } else {
+      fileLines.splice(lineNumber, 0, text);
     }
     const data = fileLines.join('\n');
     this.app.vault.modify(file, data);
