@@ -101,6 +101,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
+    if (file.extension !== 'md') {
+      // just bail
+      return;
+    }
+
     // if currently opened file is not the same as the one that fired the event, skip
     // this is to make sure other events don't trigger this plugin
     if (this.app.workspace.getActiveFile() !== file) {
@@ -139,6 +144,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    */
   handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
     if (!(file instanceof TFile)) {
+      return;
+    }
+
+    if (file.extension !== 'md') {
+      // just bail
       return;
     }
 
