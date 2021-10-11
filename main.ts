@@ -12,7 +12,7 @@ import {
   Editor,
 } from 'obsidian';
 
-const stockIllegalSymbols = ['*', '\\', '/', '<', '>', ':', '|', '?'];
+const stockIllegalSymbols = ['\\', '/',  ':', '|', '#', '^', '[', ']'];
 
 interface LinePointer {
   lineNumber: number;
