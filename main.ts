@@ -342,10 +342,12 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Filename Heading Sync' });
     containerEl.createEl('p', {
-      text: 'This plugin will overwrite the first heading found in a file with the filename.',
+      text:
+        'This plugin will overwrite the first heading found in a file with the filename.',
     });
     containerEl.createEl('p', {
-      text: 'If no header is found, will insert a new one at the first line (after frontmatter).',
+      text:
+        'If no header is found, will insert a new one at the first line (after frontmatter).',
     });
 
     new Setting(containerEl)
@@ -395,7 +397,8 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Manually Ignored Files' });
     containerEl.createEl('p', {
-      text: 'You can ignore files from this plugin by using the "ignore this file" command',
+      text:
+        'You can ignore files from this plugin by using the "ignore this file" command',
     });
 
     // go over all ignored files and add them
