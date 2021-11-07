@@ -12,7 +12,7 @@ import {
   Editor,
 } from 'obsidian';
 
-const stockIllegalSymbols = ['\\', '/', ':', '|', '#', '^', '[', ']'];
+const stockIllegalSymbols =  /[\\/:|#^[\]]/g;
 
 interface LinePointer {
   lineNumber: number;
@@ -229,11 +229,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   sanitizeHeading(text: string) {
-    let combinedIllegalSymbols = [
-      ...stockIllegalSymbols,
-      ...this.settings.userIllegalSymbols,
-    ];
-    combinedIllegalSymbols.forEach((symbol) => {
+    // stockIllegalSymbols is a regExp object, but userIllegalSymbols is a list of strings and therefore they are handled separately.
+    text = text.replace(stockIllegalSymbols, '');
+    this.settings.userIllegalSymbols.forEach(symbol => {
       text = text.replace(symbol, '');
     });
     return text.trim();
