@@ -23,14 +23,12 @@ interface FilenameHeadingSyncPluginSettings {
   userIllegalSymbols: string[];
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
-  removePreamble: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   userIllegalSymbols: [],
   ignoredFiles: {},
   ignoreRegex: '',
-  removePreamble: false,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -48,11 +46,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)),
     );
     this.registerEvent(
-      this.app.workspace.on('file-open', (file) => {
-        // uncommenting this line may help to make default templates work (or maybe templater renaming scripts?)
-        // await new Promise((res) => setTimeout(res, 500));
+      this.app.workspace.on('file-open', (file) =>
         this.handleSyncFilenameToHeading(file, file.path),
-      }),
+      ),
     );
 
     this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
@@ -128,12 +124,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       if (heading === null) return; // no heading found, nothing to do here
 
-      let sanitizedHeading = this.sanitizeHeading(heading.Text);
-      let sanitizedHeading = this.sanitizeHeading(heading.Text);
-      if (this.settings.removePreamble == true) {
-        sanitizedHeading = view.file.basename.replace(/ .*/, '') + " " + sanitizedHeading;  // view is currently undefined
-      }
-      
+      const sanitizedHeading = this.sanitizeHeading(heading.text);
       if (
         sanitizedHeading.length > 0 &&
         this.sanitizeHeading(file.basename) !== sanitizedHeading
@@ -178,11 +169,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    let sanitizedHeading = this.sanitizeHeading(file.basename);
-		if (this.settings.removePreamble == true) {
-			sanitizedHeading = sanitizedHeading.split(' ').slice(1).join(' ')
-			console.log(sanitizedHeading);
-		}
+    const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -243,10 +230,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
   sanitizeHeading(text: string) {
     // stockIllegalSymbols is a regExp object, but userIllegalSymbols is a list of strings and therefore they are handled separately.
-    if (this.settings.removePreamble == true) {
-      sanitizedHeading = view.file.basename.replace(/ .*/, '') + " " + sanitizedHeading;
-      
-    }
     text = text.replace(stockIllegalSymbols, '');
     this.settings.userIllegalSymbols.forEach(symbol => {
       text = text.replace(symbol, '');
@@ -400,18 +383,6 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             renderRegexIgnoredFiles(regexIgnoredFilesDiv);
           }),
-      );
-    
-    new Setting(containerEl)
-      .setName('Remove Shortdate Preamble')
-      .setDesc('When enabled this will remove the shortdate code at the beginning of the filename when translating to heading.')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.removePreamble)
-          .onChange(async (value) => {
-            this.plugin.settings.removePreamble = value;
-            await this.plugin.saveSettings();
-           }),
       );
 
     containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
