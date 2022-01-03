@@ -12,6 +12,8 @@ import {
   Editor,
 } from 'obsidian';
 
+import { isExcluded } from './exclusions';
+
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
 interface LinePointer {
@@ -72,7 +74,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     });
   }
 
-  fileIsIgnored(path: string): boolean {
+  fileIsIgnored(activeFile: TFile, path: string): boolean {
+    // check exclusions
+    if (isExcluded(this.app, activeFile)) {
+      return true;
+    }
+
     // check manual ignore
     if (this.settings.ignoredFiles[path] !== undefined) {
       return true;
@@ -113,7 +120,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
 
     // if ignored, just bail
-    if (this.fileIsIgnored(file.path)) {
+    if (this.fileIsIgnored(file, file.path)) {
       return;
     }
 
@@ -153,7 +160,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
 
     // if oldpath is ignored, hook in and update the new filepath to be ignored instead
-    if (this.fileIsIgnored(oldPath.trim())) {
+    if (this.fileIsIgnored(file, oldPath.trim())) {
       // if filename didn't change, just bail, nothing to do here
       if (file.path === oldPath) {
         return;
