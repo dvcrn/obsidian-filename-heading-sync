@@ -15,6 +15,12 @@ Discussion on the obsidian forum [here](https://forum.obsidian.md/t/plugin-for-k
 - When opening a file with a different heading than the current file name -> will update the heading
 - When updating the heading of a file -> will rename the file
 
+## This plugin conflicts with plugin X, how do I solve this?
+
+First check if this is already solvable by adding a regex rule. For example if your file always ends in `myfile.foo.md` (ending `foo`), you can exclude this globally by adding the following regex rule in the plugins settings: `.*\.foo\.md`
+
+If this is not solvable through ignore rules, [open a new issue](https://github.com/dvcrn/obsidian-filename-heading-sync/issues/new) with steps and examples how to reproduce the problem.
+
 ## Current limitations and to do
 
 - When renaming a file that isn't the current file, nothing will happen. The heading will get updated the next time the file is opened in edit mode
