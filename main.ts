@@ -1,17 +1,11 @@
 import {
   App,
-  Modal,
-  Notice,
   Plugin,
   PluginSettingTab,
   Setting,
-  EventRef,
-  MarkdownView,
-  TFile,
   TAbstractFile,
-  Editor,
+  TFile,
 } from 'obsidian';
-
 import { isExcluded } from './exclusions';
 
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
@@ -25,12 +19,14 @@ interface FilenameHeadingSyncPluginSettings {
   userIllegalSymbols: string[];
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
+  useFileOpenHook: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   userIllegalSymbols: [],
   ignoredFiles: {},
   ignoreRegex: '',
+  useFileOpenHook: true,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -47,10 +43,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)),
     );
+
     this.registerEvent(
-      this.app.workspace.on('file-open', (file) =>
-        this.handleSyncFilenameToHeading(file, file.path),
-      ),
+      this.app.workspace.on('file-open', (file) => {
+        if (this.settings.useFileOpenHook) {
+          return this.handleSyncFilenameToHeading(file, file.path);
+        }
+      }),
     );
 
     this.addSettingTab(new FilenameHeadingSyncSettingTab(this.app, this));
@@ -389,6 +388,20 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
             await this.plugin.saveSettings();
             renderRegexIgnoredFiles(regexIgnoredFilesDiv);
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Use File Open Hook')
+      .setDesc(
+        'Whether this plugin should trigger when a file is opened, and not just on save. Disable this when you notice conflicts with other plugins that also act on file open.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useFileOpenHook)
+          .onChange(async (value) => {
+            this.plugin.settings.useFileOpenHook = value;
+            await this.plugin.saveSettings();
           }),
       );
 
