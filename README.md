@@ -23,6 +23,10 @@ Discussion on the obsidian forum [here](https://forum.obsidian.md/t/plugin-for-k
 
 - If this still didn't solve the issue, [open a new issue](https://github.com/dvcrn/obsidian-filename-heading-sync/issues/new) with steps and examples how to reproduce the problem.
 
+### Conflict with 'templater'
+
+Disable the file-open hook in settings and they should play together nicely ([#40](https://github.com/dvcrn/obsidian-filename-heading-sync/issues/40))
+
 ## Current limitations and to do
 
 - When renaming a file that isn't the current file, nothing will happen. The heading will get updated the next time the file is opened in edit mode
