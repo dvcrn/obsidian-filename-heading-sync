@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
+  isRenameInProgress: boolean = false;
   settings: FilenameHeadingSyncPluginSettings;
 
   async onload() {
@@ -123,7 +124,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.app.vault.read(file).then((data) => {
+    this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
       const heading = this.findHeading(lines, start);
@@ -136,7 +137,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         this.sanitizeHeading(file.basename) !== sanitizedHeading
       ) {
         const newPath = `${file.parent.path}/${sanitizedHeading}.md`;
-        this.app.fileManager.renameFile(file, newPath);
+        this.isRenameInProgress = true;
+        await this.app.fileManager.renameFile(file, newPath);
+        this.isRenameInProgress = false;
       }
     });
   }
@@ -149,6 +152,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param      {string}         oldPath  The old path
    */
   handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
+    if (this.isRenameInProgress) {
+      return;
+    }
+
     if (!(file instanceof TFile)) {
       return;
     }
