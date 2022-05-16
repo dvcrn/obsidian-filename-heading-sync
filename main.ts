@@ -244,13 +244,18 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   regExpEscape(str: string): string {
     return String(str).replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
   }
-  
+
   sanitizeHeading(text: string) {
     // stockIllegalSymbols is a regExp object, but userIllegalSymbols is a list of strings and therefore they are handled separately.
     text = text.replace(stockIllegalSymbols, '');
 
-    const userIllegalSymbolsEscaped = this.settings.userIllegalSymbols.map(str => this.regExpEscape(str));
-    const userIllegalSymbolsRegExp = new RegExp(userIllegalSymbolsEscaped.join('|'), 'g');
+    const userIllegalSymbolsEscaped = this.settings.userIllegalSymbols.map(
+      (str) => this.regExpEscape(str),
+    );
+    const userIllegalSymbolsRegExp = new RegExp(
+      userIllegalSymbolsEscaped.join('|'),
+      'g',
+    );
     text = text.replace(userIllegalSymbolsRegExp, '');
     return text.trim();
   }
