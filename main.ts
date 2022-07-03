@@ -5,6 +5,8 @@ import {
   Setting,
   TAbstractFile,
   TFile,
+  Editor,
+  MarkdownView
 } from 'obsidian';
 import { isExcluded } from './exclusions';
 
@@ -20,6 +22,7 @@ interface FilenameHeadingSyncPluginSettings {
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
   useFileOpenHook: boolean;
+  useFileSaveHook: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -27,6 +30,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   ignoredFiles: {},
   ignoreRegex: '',
   useFileOpenHook: true,
+  useFileSaveHook: true,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -38,11 +42,19 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) =>
-        this.handleSyncFilenameToHeading(file, oldPath),
-      ),
+        {
+          if (this.settings.useFileSaveHook) {
+            return this.handleSyncFilenameToHeading(file, oldPath);
+          }
+        }
+      )
     );
     this.registerEvent(
-      this.app.vault.on('modify', (file) => this.handleSyncHeadingToFile(file)),
+      this.app.vault.on('modify', (file) => {
+        if (this.settings.useFileSaveHook) {
+          return this.handleSyncHeadingToFile(file);
+        }
+      })
     );
 
     this.registerEvent(
@@ -72,6 +84,19 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         return false;
       },
     });
+
+    this.addCommand({
+      id: 'sync-filename-to-heading',
+      name: 'Sync Filename to Heading',
+      editorCallback: (editor: Editor, view: MarkdownView) => this.forceSyncFilenameToHeading(view.file)
+    });
+
+    this.addCommand({
+      id: 'sync-heading-to-filename',
+      name: 'Sync Heading to Filename',
+      editorCallback: (editor: Editor, view: MarkdownView) => this.forceSyncHeadingToFilename(view.file)
+    });
+
   }
 
   fileIsIgnored(activeFile: TFile, path: string): boolean {
@@ -124,6 +149,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
+    this.forceSyncHeadingToFilename(file);
+  }
+
+  forceSyncHeadingToFilename(file: TFile) {
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -182,6 +211,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
+    this.forceSyncFilenameToHeading(file);
+  }
+
+  forceSyncFilenameToHeading(file: TFile) {
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
@@ -418,6 +451,20 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.useFileOpenHook)
           .onChange(async (value) => {
             this.plugin.settings.useFileOpenHook = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Use File Save Hook')
+      .setDesc(
+        'Whether this plugin should trigger when a file is saved. Disable this when you want to trigger sync only manually.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useFileSaveHook)
+          .onChange(async (value) => {
+            this.plugin.settings.useFileSaveHook = value;
             await this.plugin.saveSettings();
           }),
       );
