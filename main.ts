@@ -6,7 +6,7 @@ import {
   TAbstractFile,
   TFile,
   Editor,
-  MarkdownView
+  MarkdownView,
 } from 'obsidian';
 import { isExcluded } from './exclusions';
 
@@ -41,20 +41,18 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     await this.loadSettings();
 
     this.registerEvent(
-      this.app.vault.on('rename', (file, oldPath) =>
-        {
-          if (this.settings.useFileSaveHook) {
-            return this.handleSyncFilenameToHeading(file, oldPath);
-          }
+      this.app.vault.on('rename', (file, oldPath) => {
+        if (this.settings.useFileSaveHook) {
+          return this.handleSyncFilenameToHeading(file, oldPath);
         }
-      )
+      }),
     );
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
         if (this.settings.useFileSaveHook) {
           return this.handleSyncHeadingToFile(file);
         }
-      })
+      }),
     );
 
     this.registerEvent(
@@ -88,15 +86,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.addCommand({
       id: 'sync-filename-to-heading',
       name: 'Sync Filename to Heading',
-      editorCallback: (editor: Editor, view: MarkdownView) => this.forceSyncFilenameToHeading(view.file)
+      editorCallback: (editor: Editor, view: MarkdownView) =>
+        this.forceSyncFilenameToHeading(view.file),
     });
 
     this.addCommand({
       id: 'sync-heading-to-filename',
       name: 'Sync Heading to Filename',
-      editorCallback: (editor: Editor, view: MarkdownView) => this.forceSyncHeadingToFilename(view.file)
+      editorCallback: (editor: Editor, view: MarkdownView) =>
+        this.forceSyncHeadingToFilename(view.file),
     });
-
   }
 
   fileIsIgnored(activeFile: TFile, path: string): boolean {
