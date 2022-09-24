@@ -57,7 +57,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
-        if (this.settings.useFileOpenHook) {
+        if (this.settings.useFileOpenHook && file !== null) {
           return this.handleSyncFilenameToHeading(file, file.path);
         }
       }),
