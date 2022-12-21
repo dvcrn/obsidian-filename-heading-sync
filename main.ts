@@ -404,9 +404,9 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     });
 
     new Setting(containerEl)
-      .setName('Custom Illegal Charaters/Strings')
+      .setName('Custom Illegal Characters/Strings')
       .setDesc(
-        'Type charaters/strings seperated by a comma. This input is space sensitive.',
+        'Type characters/strings separated by a comma. This input is space sensitive.',
       )
       .addText((text) =>
         text
