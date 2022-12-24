@@ -262,7 +262,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
   findHeading(fileLines: string[], startLine: number): LinePointer | null {
-    for (let i = startLine; i < fileLines.length; i++) {
+    let maxlines = 10
+    for (let i = startLine; i < Math.min(fileLines.length, maxlines); i++) {
       if (fileLines[i].startsWith('# ')) {
         return {
           lineNumber: i,
