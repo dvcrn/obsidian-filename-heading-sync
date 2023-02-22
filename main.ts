@@ -251,13 +251,15 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         }
       }
     }
-    else if (/`(class|cls):\s*meta\s*`/g.test(fileLines[0].trim())) {
+    // Support Lila's frontmatter
+    else if (/`\s*((class|cls):\s*|\.)meta\s*`/g.test(fileLines[0].trim())) {
       for (let i = 1; i < fileLines.length; i++) {
         if (!fileLines[i].trim().startsWith("-")) {
           // end of frontmatter found, next line is start of note
-          return i + 1;
+          return i;
         }
       }
+      return fileLines.length;
     }
     return 0;
   }
