@@ -33,6 +33,8 @@ interface FilenameHeadingSyncPluginSettings {
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
   underlineString: string;
+  frontmatterTitle: boolean;
+  frontmatterTitleKey: string;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -44,6 +46,8 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
+  frontmatterTitle: false,
+  frontmatterTitleKey: 'title',
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -109,6 +113,20 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       editorCallback: (editor: Editor, view: MarkdownView) =>
         this.forceSyncHeadingToFilename(view.file),
     });
+
+    this.addCommand({
+      id : 'sync-filename-to-frontmatter',
+      name: 'Sync Filename to Frontmatter',
+      editorCallback: (editor: Editor, view: MarkdownView) =>
+        this.forceSyncFilenameToHeading(view.file, true),
+    });
+
+    this.addCommand({
+      id : 'sync-frontmatter-to-filename',
+      name: 'Sync Frontmatter to Filename',
+      editorCallback: (editor: Editor, view: MarkdownView) =>
+        this.forceSyncHeadingToFilename(view.file, true),
+    });
   }
 
   fileIsIgnored(activeFile: TFile, path: string): boolean {
@@ -161,14 +179,17 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.forceSyncHeadingToFilename(file);
+    this.forceSyncHeadingToFilename(file, this.settings.frontmatterTitle);
   }
 
-  forceSyncHeadingToFilename(file: TFile) {
+  forceSyncHeadingToFilename(file: TFile, sync_frontmatter_instead:boolean = false) {
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
-      const heading = this.findHeading(lines, start);
+      var heading = null;
+      if (sync_frontmatter_instead) {
+        heading = this.findFrontmatterTitle(lines);
+      } else heading = this.findHeading(lines, start);
 
       if (heading === null) return; // no heading found, nothing to do here
 
@@ -223,27 +244,54 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.forceSyncFilenameToHeading(file);
+    this.forceSyncFilenameToHeading(file, this.settings.frontmatterTitle);
   }
 
-  forceSyncFilenameToHeading(file: TFile) {
+  forceSyncFilenameToHeading(file: TFile, sync_frontmatter_instead: boolean = false) {
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
-      const heading = this.findHeading(lines, start);
 
-      if (heading !== null) {
-        if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
-          this.replaceHeading(
-            file,
-            lines,
-            heading.lineNumber,
-            heading.style,
-            sanitizedHeading,
-          );
+      if (sync_frontmatter_instead) {
+        const title = this.findFrontmatterTitle(lines);
+        if (title !== null) {
+          if (this.sanitizeHeading(title.text) !== sanitizedHeading) {
+            this.replaceLineInFile(
+              file,
+              lines,
+              title.lineNumber,
+              `${this.settings.frontmatterTitleKey}: "${sanitizedHeading}"`,
+            );
+          }
+        } else {
+          var frontMatterExists = true;
+          var line = "";
+          if (lines[0] !== '---') {
+            frontMatterExists = false;
+            line += '---\n';
+          }
+          line += `${this.settings.frontmatterTitleKey}: "${sanitizedHeading}"`;
+          if (!frontMatterExists) {
+            line += '\n---';
+            this.insertLineInFile(file, lines, 0, line);
+          } else this.insertLineInFile(file, lines, 1, line);
+          console.log(line);
         }
-      } else this.insertHeading(file, lines, start, sanitizedHeading);
+      } else {
+        const heading = this.findHeading(lines, start);
+        if (heading !== null) {
+          if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
+            this.replaceLineInFile(
+              file,
+              lines,
+              heading.lineNumber,
+              sanitizedHeading,
+            );
+          }
+        } else this.insertLineInFile(file, lines, start, sanitizedHeading);
+      };
+
     });
   }
 
@@ -297,6 +345,31 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       }
     }
     return null; // no heading found
+  }
+
+  /**
+   * Finds the title element of the frontmatter
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} startLine zero-based index of the starting line of the note
+   * @returns {LinePointer | null} LinePointer to heading or null if no heading found
+   */
+  findFrontmatterTitle(fileLines: string[]): LinePointer | null {
+    if (fileLines[0] !== '---') {
+      // No frontmatter found
+      return null;
+    }
+    for (let i = 1; i < fileLines.length; i++) {
+      if (fileLines[i] === '---') {
+        return null
+      }
+      if (fileLines[i].startsWith(`${this.settings.frontmatterTitleKey}: `)) {
+        return {
+          lineNumber: i,
+          text: fileLines[i].substring(this.settings.frontmatterTitleKey.length + 2).replace(/^"|"$/g, ''),
+        };
+      }
+    }
+    return null; // no title found
   }
 
   regExpEscape(str: string): string {
@@ -518,6 +591,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
   display(): void {
     let { containerEl } = this;
     let regexIgnoredFilesDiv: HTMLDivElement;
+    let frontmatterTitleSetting: Setting;
 
     const renderRegexIgnoredFiles = (div: HTMLElement) => {
       // empty existing div
@@ -617,6 +691,34 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    new Setting(containerEl)
+      .setName("Use Frontmatter instead of heading")
+      .setDesc(
+        "Whether this plugin should use the title field in frontmatter instead of the heading.",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.frontmatterTitle)
+          .onChange(async (value) => {
+            this.plugin.settings.frontmatterTitle = value;
+            await this.plugin.saveSettings();
+            frontmatterTitleSetting.setDisabled(!this.plugin.settings.frontmatterTitle);
+          }),
+      );
+    frontmatterTitleSetting = new Setting(containerEl)
+      .setName("Key in frontmatter to use")
+      .setDesc(
+        "The key in frontmatter to use to store the file's title.",
+      ).addText((text) =>
+        text
+          .setPlaceholder(DEFAULT_SETTINGS.frontmatterTitleKey)
+          .setValue(this.plugin.settings.frontmatterTitleKey)
+          .onChange(async (value) => {
+            this.plugin.settings.frontmatterTitleKey = value;
+            await this.plugin.saveSettings();
+          }),
+      )
+      .setDisabled(!this.plugin.settings.frontmatterTitle);
 
     new Setting(containerEl)
       .setName('New Heading Style')
