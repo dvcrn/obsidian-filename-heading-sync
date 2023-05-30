@@ -333,18 +333,20 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     heading: string,
   ) {
     const newStyle = this.settings.newHeadingStyle;
-    if (newStyle === HeadingStyle.Underline) {
-      this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
+    switch (newstyle){
+      case HeadingStyle.Underline: {
+        this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
 
-      this.insertLineInFile(
-        file,
-        fileLines,
-        lineNumber + 1,
-        this.settings.underlineString,
-      );
-    } else {
-      this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
-    }
+        this.insertLineInFile(
+          file,
+          fileLines,
+          lineNumber + 1,
+          this.settings.underlineString,
+        );
+      }
+      case HeadingStyle.Prefix: {
+        this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
+      }
   }
 
   /**
@@ -366,33 +368,53 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   ) {
     const newStyle = this.settings.newHeadingStyle;
     const replaceStyle = this.settings.replaceStyle;
-    // If we replace the style
+    // If replacing the style
     if (replaceStyle) {
-      // For underline style, replace heading line, then add underline if not
-      // already there.
-      if (newStyle === HeadingStyle.Underline) {
-        this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
-        if (oldStyle === HeadingStyle.Prefix) {
-          this.insertLineInFile(
-            file,
-            fileLines,
-            lineNumber + 1,
-            this.settings.underlineString,
-          );
-        } else {
-          // Update underline with setting.
-          this.replaceLineInFile(
-            file,
-            fileLines,
-            lineNumber + 1,
-            this.settings.underlineString,
-          );
-        }
-      } else {
-        // If not replacing style, match
-        if (oldStyle === HeadingStyle.Underline) {
+      switch (newStyle) {
+        // For underline style, replace heading line...
+        case HeadingStyle.Underline: {
           this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
-        } else {
+          //..., then add or replace underline.
+          switch(oldStyle) {
+            case HeadingStyle.Prefix: {
+              this.insertLineInFile(
+                file,
+                fileLines,
+                lineNumber + 1,
+                this.settings.underlineString,
+              );
+            }
+            case HeadingStyle.Underline: {
+              // Update underline with setting.
+              this.replaceLineInFile(
+                file,
+                fileLines,
+                lineNumber + 1,
+                this.settings.underlineString,
+              );
+            }
+          }
+        }
+        // For prefix style, replace heading line, and possibly delete underline
+        case HeadingStyle.Prefix: {
+          this.replaceLineInFile(file, fileLines, lineNumber, `# ${newHeading}`);
+          switch (oldStyle) {
+            case HeadingStyle.Prefix: {
+              // nop
+            }
+            case HeadingStyle.Underline: {
+              this.replaceLineInFile(file, fileLines, lineNumber+1, '');
+            }
+          }
+        }
+      }
+    } else {
+      // If not replacing style, match
+      switch (oldStyle) {
+        case HeadingStyle.Underline: {
+          this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
+        }
+        case HeadingStyle.Prefix: {
           this.replaceLineInFile(
             file,
             fileLines,
