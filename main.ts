@@ -592,7 +592,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('New Heading Style')
       .setDesc(
-        'Which Markdown heading style to use when creating new headings: Prefix ("# Heading") or Underline ("Heading\n===").',
+        'Which Markdown heading style to use when creating new headings: Prefix ("# Heading") or Underline ("Heading\\n===").',
       )
       .addDropdown((cb) =>
         cb
