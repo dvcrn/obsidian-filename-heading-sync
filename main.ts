@@ -12,7 +12,7 @@ import { isExcluded } from './exclusions';
 
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
-enum HeadingStyle {
+const enum HeadingStyle {
     Prefix,
     Underline,
 }
@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   ignoreRegex: '',
   useFileOpenHook: true,
   useFileSaveHook: true,
-  newHeadingStyle: Prefix,
+  newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: "===";
 };
@@ -280,14 +280,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         return {
           lineNumber: i,
           text: fileLines[i].substring(2),
-          style: Prefix,
+          style: HeadingStyle.Prefix,
         };
       } else {
           if (fileLines[i+1].match(/^=+$/) !== null) {
             return {
               lineNumber: i,
               text: fileLines[i],
-              style: Underline,
+              style: HeadingStyle.Underline,
             }
           }
       }
@@ -382,7 +382,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           lineNumber,
           `${newHeading}`,
         );
-        if (oldStyle === Prefix) {
+        if (oldStyle === HeadingStyle.Prefix) {
           this.insertLineInFile(
             file,
             lines,
@@ -392,7 +392,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         }
       } else {
         // If not replacing style, match
-        if (oldStyle === Underline) {
+        if (oldStyle === HeadingStyle.Underline) {
           this.replaceLineInFile(
             file,
             lines,
@@ -598,10 +598,10 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.newHeadingStyle)
           .onChange(async (value) => {
               if (value === "Prefix") {
-                this.plugin.settings.newHeadingStyle = Prefix;
+                this.plugin.settings.newHeadingStyle = HeadingStyle.Prefix;
               }
               if (value === "Underline") {
-                this.plugin.settings.newHeadingStyle = Underline;
+                this.plugin.settings.newHeadingStyle = HeadingStyle.Underline;
               }
               await this.plugin.saveSettings();
           }),
