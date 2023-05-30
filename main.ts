@@ -42,7 +42,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   useFileSaveHook: true,
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
-  underlineString: "===";
+  underlineString: "===",
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -283,7 +283,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           style: HeadingStyle.Prefix,
         };
       } else {
-          if (fileLines[i+1].match(/^=+$/) !== null) {
+          if (fileLines[i+1] !== undefined && fileLines[i+1].match(/^=+$/) !== null) {
             return {
               lineNumber: i,
               text: fileLines[i],
@@ -329,25 +329,26 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     heading: string,
   ){
     const newStyle = this.settings.newHeadingStyle;
-    if (newStyle === Underline) {
+    if (newStyle === HeadingStyle.Underline) {
       this.insertLineInFile(
         file,
-        lines,
+        fileLines,
         lineNumber,
-        `${heading}`,
+        `${heading}`
       );
+
       this.insertLineInFile(
         file,
-        lines,
+        fileLines,
         lineNumber+1,
-        this.settings.underlineString;
+        this.settings.underlineString
       );
     } else {
       this.insertLineInFile(
         file,
-        lines,
+        fileLines,
         lineNumber,
-        `# ${heading}`,
+        `# ${heading}`
       );
     }
   }
@@ -375,19 +376,19 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     if (replaceStyle) {
       // For underline style, replace heading line, then add underline if not
       // already there.
-      if (newStyle === Underline) {
+      if (newStyle === HeadingStyle.Underline) {
         this.replaceLineInFile(
           file,
-          lines,
+          fileLines,
           lineNumber,
           `${newHeading}`,
         );
         if (oldStyle === HeadingStyle.Prefix) {
           this.insertLineInFile(
             file,
-            lines,
+            fileLines,
             lineNumber+1,
-            this.settings.underlineString;
+            this.settings.underlineString
           );
         }
       } else {
@@ -395,16 +396,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         if (oldStyle === HeadingStyle.Underline) {
           this.replaceLineInFile(
             file,
-            lines,
+            fileLines,
             lineNumber,
-            `${newHeading}`,
+            `${newHeading}`
           );
         } else {
           this.replaceLineInFile(
             file,
-            lines,
+            fileLines,
             lineNumber,
-            `# ${newHeading}`,
+            `# ${newHeading}`
           );
         }
       }
@@ -628,7 +629,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       )
       .addText((text) =>
         text
-          .setPlaceHolder("===")
+          .setPlaceholder("===")
           .setValue(this.plugin.settings.underlineString)
           .onChange(async (value) => {
             this.plugin.settings.underlineString = value;
