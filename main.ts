@@ -12,9 +12,15 @@ import { isExcluded } from './exclusions';
 
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
+enum HeadingStyle {
+    Prefix,
+    Underline,
+}
+
 interface LinePointer {
   lineNumber: number;
   text: string;
+  style: HeadingStyle;
 }
 
 interface FilenameHeadingSyncPluginSettings {
@@ -23,6 +29,9 @@ interface FilenameHeadingSyncPluginSettings {
   ignoredFiles: { [key: string]: null };
   useFileOpenHook: boolean;
   useFileSaveHook: boolean;
+  newHeadingStyle: HeadingStyle;
+  replaceStyle: boolean;
+  underlineString: string;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -31,6 +40,9 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   ignoreRegex: '',
   useFileOpenHook: true,
   useFileSaveHook: true,
+  newHeadingStyle: Prefix,
+  replaceStyle: false,
+  underlineString: "===";
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -222,14 +234,15 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       if (heading !== null) {
         if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
-          this.replaceLineInFile(
+          this.replaceHeading(
             file,
             lines,
             heading.lineNumber,
-            `# ${sanitizedHeading}`,
+            heading.style,
+            sanitizedHeading,
           );
         }
-      } else this.insertLineInFile(file, lines, start, `# ${sanitizedHeading}`);
+      } else this.insertHeading(file, lines, start, sanitizedHeading);
     });
   }
 
@@ -267,7 +280,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         return {
           lineNumber: i,
           text: fileLines[i].substring(2),
+          style: Prefix,
         };
+      } else {
+          if (fileLines[i+1].match(/^=+$/) !== null) {
+            return {
+              lineNumber: i,
+              text: fileLines[i],
+              style: Underline,
+            }
+          }
       }
     }
     return null; // no heading found
@@ -290,6 +312,103 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     );
     text = text.replace(userIllegalSymbolsRegExp, '');
     return text.trim();
+  }
+
+ /**
+  * Insert the `heading` at `lineNumber` in `file`.
+  *
+  * @param {TFile} file the file to modify
+  * @param {string[]} fileLines array of the file's contents, line by line
+  * @param {number} lineNumber zero-based index of the line to replace
+  * @param {string} text the new text
+  */
+  insertHeading(
+    file: TFile,
+    fileLines: string[],
+    lineNumber: number,
+    heading: string,
+  ){
+    const newStyle = this.settings.newHeadingStyle;
+    if (newStyle === Underline) {
+        this.insertLineInFile(
+            file,
+            lines,
+            lineNumber,
+            `${heading}`,
+        );
+        this.insertLineInFile(
+            file,
+            lines,
+            lineNumber+1,
+            this.settings.underlineString;
+        );
+    } else {
+        this.insertLineInFile(
+            file,
+            lines,
+            lineNumber,
+            `# ${heading}`,
+        );
+    }
+  }
+
+ /**
+  * Modified `file` by replacing the heading at `lineNumber` with `newHeading`,
+  * updating the heading style according the user settings.
+  *
+  * @param {TFile} file the file to modify
+  * @param {string[]} fileLines array of the file's contents, line by line
+  * @param {number} lineNumber zero-based index of the line to replace
+  * @param {HeadingStyle} oldStyle the style of the original heading
+  * @param {string} text the new text
+  */
+  replaceHeading(
+    file: TFile,
+    fileLines: string[],
+    lineNumber: number,
+    oldStyle: HeadingStyle,
+    newHeading: string,
+  ){
+    const newStyle = this.settings.newHeadingStyle;
+    const replaceStyle = this.settings.replaceStyle;
+    // If we replace the style
+    if (replaceStyle) {
+        // For underline style, replace heading line, then add underline if not
+        // already there.
+        if (newStyle === Underline) {
+            this.replaceLineInFile(
+                file,
+                lines,
+                lineNumber,
+                `${newHeading}`,
+            );
+            if (oldStyle === Prefix) {
+                this.insertLineInFile(
+                    file,
+                    lines,
+                    lineNumber+1,
+                    this.settings.underlineString;
+                );
+            }
+        } else {
+            // If not replacing style, match
+            if (oldStyle === Underline) {
+                this.replaceLineInFile(
+                    file,
+                    lines,
+                    lineNumber,
+                    `${newHeading}`,
+                );
+            } else {
+                this.replaceLineInFile(
+                    file,
+                    lines,
+                    lineNumber,
+                    `# ${newHeading}`,
+                );
+            }
+        }
+    }
   }
 
   /**
@@ -467,6 +586,55 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName('New Heading Style')
+      .setDesc(
+        'Which Markdown heading style to use when creating new headings: Prefix ("# Heading") or Underline ("Heading\n===").',
+      )
+      .addText((text) =>
+        text
+          .setPlaceHolder("Prefix|Underline")
+          .setValue(this.plugin.settings.newHeadingStyle)
+          .onChange(async (value) => {
+              if (value === "Prefix") {
+                this.plugin.settings.newHeadingStyle = Prefix;
+              }
+              if (value === "Underline") {
+                this.plugin.settings.newHeadingStyle = Underline;
+              }
+              await this.plugin.saveSettings();
+          }),
+      );
+
+      new Setting(containerEl)
+          .setName('Replace Heading Style')
+          .setDesc(
+              'Whether this plugin should replace existing heading styles when updating headings.',
+          )
+          .addToggle((toggle) =>
+              toggle
+                  .setValue(this.plugin.settings.replaceStyle)
+                  .onChange(async (value) => {
+                      this.plugin.settings.replaceStyle = value;
+                      await this.plugin.saveSettings();
+                  }),
+          );
+
+      new Setting(containerEl)
+          .setName('Underline String')
+          .setDesc(
+              'The string to use when insert Underline-style headings; should be some number of "="s.',
+          )
+          .addText((text) =>
+              text
+                .setPlaceHolder("===")
+                .setValue(this.plugin.settings.underlineString)
+                .onChange(async (value) => {
+                  this.plugin.settings.underlineString = value;
+                  await this.plugin.saveSettings();
+                }),
+         );
 
     containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
     containerEl.createEl('p', {
