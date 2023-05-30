@@ -333,7 +333,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     heading: string,
   ) {
     const newStyle = this.settings.newHeadingStyle;
-    switch (newstyle) {
+    switch (newStyle) {
       case HeadingStyle.Underline: {
         this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
 
@@ -343,9 +343,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           lineNumber + 1,
           this.settings.underlineString,
         );
+        break;
       }
       case HeadingStyle.Prefix: {
         this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
+        break;
       }
     }
   }
@@ -384,6 +386,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
                 lineNumber + 1,
                 this.settings.underlineString,
               );
+              break;
             }
             case HeadingStyle.Underline: {
               // Update underline with setting.
@@ -393,8 +396,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
                 lineNumber + 1,
                 this.settings.underlineString,
               );
+              break;
             }
           }
+          break;
         }
         // For prefix style, replace heading line, and possibly delete underline
         case HeadingStyle.Prefix: {
@@ -407,11 +412,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           switch (oldStyle) {
             case HeadingStyle.Prefix: {
               // nop
+              break;
             }
             case HeadingStyle.Underline: {
               this.replaceLineInFile(file, fileLines, lineNumber + 1, '');
+              break;
             }
           }
+          break;
         }
       }
     } else {
@@ -419,6 +427,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       switch (oldStyle) {
         case HeadingStyle.Underline: {
           this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
+          break;
         }
         case HeadingStyle.Prefix: {
           this.replaceLineInFile(
@@ -427,6 +436,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
             lineNumber,
             `# ${newHeading}`,
           );
+          break;
         }
       }
     }
