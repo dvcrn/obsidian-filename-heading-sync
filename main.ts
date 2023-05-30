@@ -379,6 +379,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
             lineNumber + 1,
             this.settings.underlineString,
           );
+        } else {
+          // Update underline with setting.
+          this.replaceLineInFile(
+            file,
+            fileLines,
+            lineNumber + 1,
+            this.settings.underlineString,
+          );
         }
       } else {
         // If not replacing style, match
