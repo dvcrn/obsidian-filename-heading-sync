@@ -14,8 +14,8 @@ const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
 // Must be Strings unless settings dialog is updated.
 const enum HeadingStyle {
-    Prefix = "Prefix",
-    Underline = "Underline",
+  Prefix = 'Prefix',
+  Underline = 'Underline',
 }
 
 interface LinePointer {
@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   useFileSaveHook: true,
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
-  underlineString: "===",
+  underlineString: '===',
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -284,13 +284,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           style: HeadingStyle.Prefix,
         };
       } else {
-          if (fileLines[i+1] !== undefined && fileLines[i+1].match(/^=+$/) !== null) {
-            return {
-              lineNumber: i,
-              text: fileLines[i],
-              style: HeadingStyle.Underline,
-            }
-          }
+        if (
+          fileLines[i + 1] !== undefined &&
+          fileLines[i + 1].match(/^=+$/) !== null
+        ) {
+          return {
+            lineNumber: i,
+            text: fileLines[i],
+            style: HeadingStyle.Underline,
+          };
+        }
       }
     }
     return null; // no heading found
@@ -315,62 +318,52 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return text.trim();
   }
 
- /**
-  * Insert the `heading` at `lineNumber` in `file`.
-  *
-  * @param {TFile} file the file to modify
-  * @param {string[]} fileLines array of the file's contents, line by line
-  * @param {number} lineNumber zero-based index of the line to replace
-  * @param {string} text the new text
-  */
+  /**
+   * Insert the `heading` at `lineNumber` in `file`.
+   *
+   * @param {TFile} file the file to modify
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} lineNumber zero-based index of the line to replace
+   * @param {string} text the new text
+   */
   insertHeading(
     file: TFile,
     fileLines: string[],
     lineNumber: number,
     heading: string,
-  ){
+  ) {
     const newStyle = this.settings.newHeadingStyle;
     if (newStyle === HeadingStyle.Underline) {
-      this.insertLineInFile(
-        file,
-        fileLines,
-        lineNumber,
-        `${heading}`
-      );
+      this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
 
       this.insertLineInFile(
         file,
         fileLines,
-        lineNumber+1,
-        this.settings.underlineString
+        lineNumber + 1,
+        this.settings.underlineString,
       );
     } else {
-      this.insertLineInFile(
-        file,
-        fileLines,
-        lineNumber,
-        `# ${heading}`
-      );
+      this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
     }
   }
 
- /**
-  * Modified `file` by replacing the heading at `lineNumber` with `newHeading`,
-  * updating the heading style according the user settings.
-  *
-  * @param {TFile} file the file to modify
-  * @param {string[]} fileLines array of the file's contents, line by line
-  * @param {number} lineNumber zero-based index of the line to replace
-  * @param {HeadingStyle} oldStyle the style of the original heading
-  * @param {string} text the new text
-  */
+  /**
+   * Modified `file` by replacing the heading at `lineNumber` with `newHeading`,
+   * updating the heading style according the user settings.
+   *
+   * @param {TFile} file the file to modify
+   * @param {string[]} fileLines array of the file's contents, line by line
+   * @param {number} lineNumber zero-based index of the line to replace
+   * @param {HeadingStyle} oldStyle the style of the original heading
+   * @param {string} text the new text
+   */
   replaceHeading(
     file: TFile,
     fileLines: string[],
     lineNumber: number,
     oldStyle: HeadingStyle,
     newHeading: string,
-  ){
+  ) {
     const newStyle = this.settings.newHeadingStyle;
     const replaceStyle = this.settings.replaceStyle;
     // If we replace the style
@@ -378,35 +371,25 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       // For underline style, replace heading line, then add underline if not
       // already there.
       if (newStyle === HeadingStyle.Underline) {
-        this.replaceLineInFile(
-          file,
-          fileLines,
-          lineNumber,
-          `${newHeading}`,
-        );
+        this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
         if (oldStyle === HeadingStyle.Prefix) {
           this.insertLineInFile(
             file,
             fileLines,
-            lineNumber+1,
-            this.settings.underlineString
+            lineNumber + 1,
+            this.settings.underlineString,
           );
         }
       } else {
         // If not replacing style, match
         if (oldStyle === HeadingStyle.Underline) {
-          this.replaceLineInFile(
-            file,
-            fileLines,
-            lineNumber,
-            `${newHeading}`
-          );
+          this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
         } else {
           this.replaceLineInFile(
             file,
             fileLines,
             lineNumber,
-            `# ${newHeading}`
+            `# ${newHeading}`,
           );
         }
       }
@@ -516,12 +499,10 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Filename Heading Sync' });
     containerEl.createEl('p', {
-      text:
-        'This plugin will overwrite the first heading found in a file with the filename.',
+      text: 'This plugin will overwrite the first heading found in a file with the filename.',
     });
     containerEl.createEl('p', {
-      text:
-        'If no header is found, will insert a new one at the first line (after frontmatter).',
+      text: 'If no header is found, will insert a new one at the first line (after frontmatter).',
     });
 
     new Setting(containerEl)
@@ -596,17 +577,17 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       )
       .addDropdown((cb) =>
         cb
-          .addOption(HeadingStyle.Prefix, "Prefix")
-          .addOption(HeadingStyle.Underline, "Underline")
+          .addOption(HeadingStyle.Prefix, 'Prefix')
+          .addOption(HeadingStyle.Underline, 'Underline')
           .setValue(this.plugin.settings.newHeadingStyle)
           .onChange(async (value) => {
-              if (value === "Prefix") {
-                this.plugin.settings.newHeadingStyle = HeadingStyle.Prefix;
-              }
-              if (value === "Underline") {
-                this.plugin.settings.newHeadingStyle = HeadingStyle.Underline;
-              }
-              await this.plugin.saveSettings();
+            if (value === 'Prefix') {
+              this.plugin.settings.newHeadingStyle = HeadingStyle.Prefix;
+            }
+            if (value === 'Underline') {
+              this.plugin.settings.newHeadingStyle = HeadingStyle.Underline;
+            }
+            await this.plugin.saveSettings();
           }),
       );
 
@@ -631,7 +612,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       )
       .addText((text) =>
         text
-          .setPlaceholder("===")
+          .setPlaceholder('===')
           .setValue(this.plugin.settings.underlineString)
           .onChange(async (value) => {
             this.plugin.settings.underlineString = value;
@@ -649,8 +630,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Manually Ignored Files' });
     containerEl.createEl('p', {
-      text:
-        'You can ignore files from this plugin by using the "ignore this file" command',
+      text: 'You can ignore files from this plugin by using the "ignore this file" command',
     });
 
     // go over all ignored files and add them
