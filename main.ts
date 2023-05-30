@@ -12,9 +12,10 @@ import { isExcluded } from './exclusions';
 
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
+// Must be Strings unless settings dialog is updated.
 const enum HeadingStyle {
-    Prefix,
-    Underline,
+    Prefix = "Prefix",
+    Underline = "Underline",
 }
 
 interface LinePointer {
@@ -593,9 +594,10 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       .setDesc(
         'Which Markdown heading style to use when creating new headings: Prefix ("# Heading") or Underline ("Heading\n===").',
       )
-      .addText((text) =>
-        text
-          .setPlaceHolder("Prefix|Underline")
+      .addDropdown((cb) =>
+        cb
+          .addOption(HeadingStyle.Prefix, "Prefix")
+          .addOption(HeadingStyle.Underline, "Underline")
           .setValue(this.plugin.settings.newHeadingStyle)
           .onChange(async (value) => {
               if (value === "Prefix") {
