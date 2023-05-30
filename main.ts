@@ -333,7 +333,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     heading: string,
   ) {
     const newStyle = this.settings.newHeadingStyle;
-    switch (newstyle){
+    switch (newstyle) {
       case HeadingStyle.Underline: {
         this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
 
@@ -347,6 +347,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       case HeadingStyle.Prefix: {
         this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
       }
+    }
   }
 
   /**
@@ -375,7 +376,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         case HeadingStyle.Underline: {
           this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
           //..., then add or replace underline.
-          switch(oldStyle) {
+          switch (oldStyle) {
             case HeadingStyle.Prefix: {
               this.insertLineInFile(
                 file,
@@ -397,13 +398,18 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         }
         // For prefix style, replace heading line, and possibly delete underline
         case HeadingStyle.Prefix: {
-          this.replaceLineInFile(file, fileLines, lineNumber, `# ${newHeading}`);
+          this.replaceLineInFile(
+            file,
+            fileLines,
+            lineNumber,
+            `# ${newHeading}`,
+          );
           switch (oldStyle) {
             case HeadingStyle.Prefix: {
               // nop
             }
             case HeadingStyle.Underline: {
-              this.replaceLineInFile(file, fileLines, lineNumber+1, '');
+              this.replaceLineInFile(file, fileLines, lineNumber + 1, '');
             }
           }
         }
@@ -529,10 +535,12 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Filename Heading Sync' });
     containerEl.createEl('p', {
-      text: 'This plugin will overwrite the first heading found in a file with the filename.',
+      text:
+        'This plugin will overwrite the first heading found in a file with the filename.',
     });
     containerEl.createEl('p', {
-      text: 'If no header is found, will insert a new one at the first line (after frontmatter).',
+      text:
+        'If no header is found, will insert a new one at the first line (after frontmatter).',
     });
 
     new Setting(containerEl)
@@ -660,7 +668,8 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Manually Ignored Files' });
     containerEl.createEl('p', {
-      text: 'You can ignore files from this plugin by using the "ignore this file" command',
+      text:
+        'You can ignore files from this plugin by using the "ignore this file" command',
     });
 
     // go over all ignored files and add them
