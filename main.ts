@@ -16,6 +16,7 @@ const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 const enum HeadingStyle {
   Prefix = 'Prefix',
   Underline = 'Underline',
+  Frontmatter = 'Frontmatter',
 }
 
 interface LinePointer {
@@ -103,28 +104,28 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.addCommand({
       id: 'sync-filename-to-heading',
       name: 'Sync Filename to Heading',
-      editorCallback: (editor: Editor, view: MarkdownView) =>
+      editorCallback: (_: Editor, view: MarkdownView) =>
         this.forceSyncFilenameToHeading(view.file),
     });
 
     this.addCommand({
       id: 'sync-heading-to-filename',
       name: 'Sync Heading to Filename',
-      editorCallback: (editor: Editor, view: MarkdownView) =>
+      editorCallback: (_: Editor, view: MarkdownView) =>
         this.forceSyncHeadingToFilename(view.file),
     });
 
     this.addCommand({
       id : 'sync-filename-to-frontmatter',
       name: 'Sync Filename to Frontmatter',
-      editorCallback: (editor: Editor, view: MarkdownView) =>
+      editorCallback: (_: Editor, view: MarkdownView) =>
         this.forceSyncFilenameToHeading(view.file, true),
     });
 
     this.addCommand({
       id : 'sync-frontmatter-to-filename',
       name: 'Sync Frontmatter to Filename',
-      editorCallback: (editor: Editor, view: MarkdownView) =>
+      editorCallback: (_: Editor, view: MarkdownView) =>
         this.forceSyncHeadingToFilename(view.file, true),
     });
   }
@@ -301,7 +302,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {string[]} fileLines array of the file's contents, line by line
    * @returns {number} zero-based index of the starting line of the note
    */
-  findNoteStart(fileLines: string[]) {
+  findNoteStart(fileLines: string[]): number {
     // check for frontmatter by checking if first line is a divider ('---')
     if (fileLines[0] === '---') {
       // find end of frontmatter
@@ -350,7 +351,6 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   /**
    * Finds the title element of the frontmatter
    * @param {string[]} fileLines array of the file's contents, line by line
-   * @param {number} startLine zero-based index of the starting line of the note
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
   findFrontmatterTitle(fileLines: string[]): LinePointer | null {
@@ -366,6 +366,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         return {
           lineNumber: i,
           text: fileLines[i].substring(this.settings.frontmatterTitleKey.length + 2).replace(/^"|"$/g, ''),
+          style: HeadingStyle.Frontmatter,
         };
       }
     }
@@ -397,7 +398,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {TFile} file the file to modify
    * @param {string[]} fileLines array of the file's contents, line by line
    * @param {number} lineNumber zero-based index of the line to replace
-   * @param {string} text the new text
+   * @param {string} heading the new text
    */
   insertHeading(
     file: TFile,
@@ -433,7 +434,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {string[]} fileLines array of the file's contents, line by line
    * @param {number} lineNumber zero-based index of the line to replace
    * @param {HeadingStyle} oldStyle the style of the original heading
-   * @param {string} text the new text
+   * @param {string} newHeading the new text
    */
   replaceHeading(
     file: TFile,
