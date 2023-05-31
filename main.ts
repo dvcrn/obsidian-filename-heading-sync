@@ -19,6 +19,12 @@ const enum HeadingStyle {
   Frontmatter = 'Frontmatter',
 }
 
+const enum TitleType {
+  Filename = 'Filename',
+  Frontmatter = 'Frontmatter',
+  Heading = 'Heading',
+}
+
 interface LinePointer {
   lineNumber: number;
   text: string;
@@ -105,28 +111,42 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       id: 'sync-filename-to-heading',
       name: 'Sync Filename to Heading',
       editorCallback: (_: Editor, view: MarkdownView) =>
-        this.forceSyncFilenameToHeading(view.file),
+        this.syncTitle(view.file, TitleType.Filename, TitleType.Heading),
     });
 
     this.addCommand({
       id: 'sync-heading-to-filename',
       name: 'Sync Heading to Filename',
       editorCallback: (_: Editor, view: MarkdownView) =>
-        this.forceSyncHeadingToFilename(view.file),
+        this.syncTitle(view.file, TitleType.Heading, TitleType.Filename),
     });
 
     this.addCommand({
       id : 'sync-filename-to-frontmatter',
       name: 'Sync Filename to Frontmatter',
       editorCallback: (_: Editor, view: MarkdownView) =>
-        this.forceSyncFilenameToHeading(view.file, true),
+        this.syncTitle(view.file, TitleType.Filename, TitleType.Frontmatter),
     });
 
     this.addCommand({
       id : 'sync-frontmatter-to-filename',
       name: 'Sync Frontmatter to Filename',
       editorCallback: (_: Editor, view: MarkdownView) =>
-        this.forceSyncHeadingToFilename(view.file, true),
+        this.syncTitle(view.file, TitleType.Frontmatter, TitleType.Filename),
+    });
+
+    this.addCommand({
+      id : 'sync-heading-to-frontmatter',
+      name: 'Sync Heading to Frontmatter',
+      editorCallback: (_: Editor, view: MarkdownView) =>
+        this.syncTitle(view.file, TitleType.Heading, TitleType.Frontmatter),
+    })
+
+    this.addCommand({
+      id: 'sync-frontmatter-to-heading',
+      name: 'Sync Frontmatter to Heading',
+      editorCallback: (_: Editor, view: MarkdownView) =>
+        this.syncTitle(view.file, TitleType.Frontmatter, TitleType.Heading),
     });
   }
 
@@ -180,31 +200,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.forceSyncHeadingToFilename(file, this.settings.frontmatterTitle);
-  }
-
-  forceSyncHeadingToFilename(file: TFile, sync_frontmatter_instead:boolean = false) {
-    this.app.vault.read(file).then(async (data) => {
-      const lines = data.split('\n');
-      const start = this.findNoteStart(lines);
-      var heading = null;
-      if (sync_frontmatter_instead) {
-        heading = this.findFrontmatterTitle(lines);
-      } else heading = this.findHeading(lines, start);
-
-      if (heading === null) return; // no heading found, nothing to do here
-
-      const sanitizedHeading = this.sanitizeHeading(heading.text);
-      if (
-        sanitizedHeading.length > 0 &&
-        this.sanitizeHeading(file.basename) !== sanitizedHeading
-      ) {
-        const newPath = `${file.parent.path}/${sanitizedHeading}.md`;
-        this.isRenameInProgress = true;
-        await this.app.fileManager.renameFile(file, newPath);
-        this.isRenameInProgress = false;
-      }
-    });
+    const sourceType = this.settings.frontmatterTitle ? TitleType.Frontmatter : TitleType.Heading;
+    this.syncTitle(file, sourceType, TitleType.Filename);
   }
 
   /**
@@ -245,55 +242,100 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.forceSyncFilenameToHeading(file, this.settings.frontmatterTitle);
+    const targetType = this.settings.frontmatterTitle ? TitleType.Frontmatter : TitleType.Heading;
+    this.syncTitle(file, TitleType.Filename, targetType);
   }
 
-  forceSyncFilenameToHeading(file: TFile, sync_frontmatter_instead: boolean = false) {
-    const sanitizedHeading = this.sanitizeHeading(file.basename);
+  /**
+   * Sync the title from the source to the target
+   * @param      {TAbstractFile}  file     The file
+   * @param      {TitleType}      source   The source
+   * @param      {TitleType}      target   The target
+   */
+  syncTitle(file: TFile, source: TitleType, target: TitleType) {
+    this.getTitle(file, source).then((title) => this.setTitle(file, title, target))
+  }
+
+  /**
+   * Sets the title of the file
+   * @param      {TAbstractFile}  file     The file
+   * @param      {string}         title    The title
+   * @param      {TitleType}      target   The target
+   */
+  async setTitle(file: TFile, title: string, target: TitleType): Promise<void> {
+    if (target == TitleType.Filename) {
+        if (title.length > 0 && this.sanitizeHeading(file.basename) !== title) {
+          const newPath = `${file.parent.path}/${title}.md`;
+          this.isRenameInProgress = true;
+          await this.app.fileManager.renameFile(file, newPath);
+          this.isRenameInProgress = false;
+        }
+        return
+    }
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
-      const start = this.findNoteStart(lines);
+      switch(target) {
+        case TitleType.Frontmatter:
+          const frontmatter = this.findFrontmatterTitle(lines);
+          if (frontmatter !== null) {
+            if (this.sanitizeHeading(frontmatter.text) !== title) {
+              this.replaceLineInFile(
+                file,
+                lines,
+                frontmatter.lineNumber,
+                `${this.settings.frontmatterTitleKey}: "${title}"`,
+              );
+            }
+          } else {
+            var frontMatterExists = true;
+            var line = "";
+            if (lines[0] !== '---') {
+              frontMatterExists = false;
+              line += '---\n';
+            }
+            line += `${this.settings.frontmatterTitleKey}: "${title}"`;
+            if (!frontMatterExists) {
+              line += '\n---';
+              this.insertLineInFile(file, lines, 0, line);
+            } else this.insertLineInFile(file, lines, 1, line);
+          }
+          break;
+        case TitleType.Heading:
+          const start = this.findNoteStart(lines);
+          const heading = this.findHeading(lines, start);
+          if (heading !== null) {
+            if (this.sanitizeHeading(heading.text) !== title) {
+              this.replaceHeading(file, lines, heading.lineNumber, heading.style, title);
+            }
+          } else this.insertHeading(file, lines, start, title);
+      }
+    })
+  }
 
-      if (sync_frontmatter_instead) {
-        const title = this.findFrontmatterTitle(lines);
-        if (title !== null) {
-          if (this.sanitizeHeading(title.text) !== sanitizedHeading) {
-            this.replaceLineInFile(
-              file,
-              lines,
-              title.lineNumber,
-              `${this.settings.frontmatterTitleKey}: "${sanitizedHeading}"`,
-            );
-          }
-        } else {
-          var frontMatterExists = true;
-          var line = "";
-          if (lines[0] !== '---') {
-            frontMatterExists = false;
-            line += '---\n';
-          }
-          line += `${this.settings.frontmatterTitleKey}: "${sanitizedHeading}"`;
-          if (!frontMatterExists) {
-            line += '\n---';
-            this.insertLineInFile(file, lines, 0, line);
-          } else this.insertLineInFile(file, lines, 1, line);
-          console.log(line);
-        }
-      } else {
-        const heading = this.findHeading(lines, start);
-        if (heading !== null) {
-          if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
-            this.replaceLineInFile(
-              file,
-              lines,
-              heading.lineNumber,
-              sanitizedHeading,
-            );
-          }
-        } else this.insertLineInFile(file, lines, start, sanitizedHeading);
-      };
+  /**
+   * Gets the title of the file
+   * @param {TFile} file
+   * @param {TitleType} source type
+   * @returns {Promise<string>} the title
+   */
+  async getTitle(file: TFile, source: TitleType): Promise<string> {
+    var title: string = null
 
-    });
+    if (source === TitleType.Filename) {
+      title = file.basename;
+    } else {
+      const lines = await this.app.vault.read(file).then((data) => data.split('\n'));
+      switch(source) {
+        case TitleType.Frontmatter:
+          title = this.findFrontmatterTitle(lines).text;
+          break;
+        case TitleType.Heading:
+          title = this.findHeading(lines, this.findNoteStart(lines)).text;
+          break;
+      }
+    }
+    title = this.sanitizeHeading(title);
+    return title;
   }
 
   /**
@@ -577,6 +619,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
   }
+
 }
 
 class FilenameHeadingSyncSettingTab extends PluginSettingTab {
