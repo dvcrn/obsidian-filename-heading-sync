@@ -7,6 +7,7 @@ import {
   TFile,
   Editor,
   MarkdownView,
+  Notice
 } from 'obsidian';
 import { isExcluded } from './exclusions';
 
@@ -19,10 +20,10 @@ const enum HeadingStyle {
   Frontmatter = 'Frontmatter',
 }
 
-const enum TitleType {
-  Filename = 'Filename',
-  Frontmatter = 'Frontmatter',
-  Heading = 'Heading',
+enum TitleType {
+  Filename = 'filename',
+  Frontmatter = 'frontmatter',
+  Heading = 'heading',
 }
 
 interface LinePointer {
@@ -42,7 +43,74 @@ interface FilenameHeadingSyncPluginSettings {
   underlineString: string;
   frontmatterTitle: boolean;
   frontmatterTitleKey: string;
+  contentPrecedence: string;
+  syncFilename: Set<string>;
+  syncHeading: Set<string>;
+  syncFrontmatter: Set<string>;
 }
+
+interface TitleCacheEntry {
+  heading: string;
+  frontmatter: string;
+}
+
+class TitleCache {
+  private cache: Map<string, TitleCacheEntry> = new Map();
+  maxSize: number;
+
+  constructor(maxSize: number = 100) {
+    this.maxSize = maxSize;
+
+  }
+
+  public get(path: string): TitleCacheEntry | null {
+    if (!(this.cache.has(path))) {
+      return null;
+    }
+    const entry = this.cache.get(path);
+    this.cache.delete(path);
+    this.cache.set(path, entry);
+    return entry;
+  }
+
+  public set(path: string, entry: TitleCacheEntry) {
+    if (this.cache.size >= this.maxSize) {
+      this.cache.delete(this.cache.keys().next().value);
+    }
+    this.cache.set(path, entry);
+  }
+
+  public async setFromFile(file: TFile, plugin: FilenameHeadingSyncPlugin) {
+    this.set(file.path, {
+      heading: await plugin.getTitle(file, TitleType.Heading),
+      frontmatter: await plugin.getTitle(file, TitleType.Frontmatter),
+    });
+  }
+
+  public move(oldPath: string, newPath: string) {
+    if (this.cache.has(oldPath)) {
+      this.cache.set(newPath, this.cache.get(oldPath));
+      this.cache.delete(oldPath);
+    }
+  }
+
+  public has(path: string): boolean {
+    return this.cache.has(path);
+  }
+
+  public keys(): IterableIterator<string> {
+    return this.cache.keys();
+  }
+
+  public values(): IterableIterator<TitleCacheEntry> {
+    return this.cache.values();
+  }
+
+  public entries(): IterableIterator<[string, TitleCacheEntry]> {
+    return this.cache.entries();
+  }
+}
+
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   userIllegalSymbols: [],
@@ -55,34 +123,54 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   underlineString: '===',
   frontmatterTitle: false,
   frontmatterTitleKey: 'title',
+  contentPrecedence: 'frontmatter',
+  syncFilename: new Set(['heading']),
+  syncHeading: new Set(['filename']),
+  syncFrontmatter: new Set([]),
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
   isRenameInProgress: boolean = false;
   settings: FilenameHeadingSyncPluginSettings;
+  titleCache: TitleCache = new TitleCache();
 
   async onload() {
     await this.loadSettings();
 
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) => {
+        this.titleCache.move(oldPath, file.path);
         if (this.settings.useFileSaveHook) {
-          return this.handleSyncFilenameToHeading(file, oldPath);
+          return this.handleSyncFromFilename(file, oldPath);
         }
       }),
     );
     this.registerEvent(
+      this.app.workspace.on('file-open', async (file) => {
+        if (this.settings.useFileSaveHook && file !== null && file instanceof TFile && file.extension == "md") {
+          this.titleCache.setFromFile(file, this);
+        }
+      }),
+    )
+    // Manually load titles of active file at startup as above hook is applied later
+    const file = this.app.workspace.getActiveFile()
+    if (this.settings.useFileSaveHook && file !== null && file instanceof TFile && file.extension == "md") {
+      this.titleCache.setFromFile(file, this);
+    }
+
+    this.registerEvent(
       this.app.vault.on('modify', (file) => {
         if (this.settings.useFileSaveHook) {
-          return this.handleSyncHeadingToFile(file);
+          this.handleSyncFromContent(file);
         }
       }),
     );
 
+
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
         if (this.settings.useFileOpenHook && file !== null) {
-          return this.handleSyncFilenameToHeading(file, file.path);
+          return this.handleSyncFromFilename(file, file.path);
         }
       }),
     );
@@ -175,11 +263,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   /**
-   * Renames the file with the first heading found
+   * Sync titles from file content
    *
    * @param      {TAbstractFile}  file    The file
    */
-  handleSyncHeadingToFile(file: TAbstractFile) {
+  async handleSyncFromContent(file: TAbstractFile) {
     if (!(file instanceof TFile)) {
       return;
     }
@@ -200,18 +288,64 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const sourceType = this.settings.frontmatterTitle ? TitleType.Frontmatter : TitleType.Heading;
-    this.syncTitle(file, sourceType, TitleType.Filename);
+    this.isRenameInProgress = true
+    await Promise.all([
+      this.getTitle(file, TitleType.Frontmatter),
+      this.getTitle(file, TitleType.Heading),
+    ]).then(async ([frontmatter, heading]) => {
+      if (frontmatter === heading) {
+        return
+      }
+      // Determine if heading or front matter changed
+      const precedence = this.settings.contentPrecedence as TitleType;
+      const nonPrecedence: TitleType = precedence !== TitleType.Heading ? TitleType.Heading : TitleType.Frontmatter;
+      const cache = this.titleCache.get(file.path);
+      const changed = new Map<TitleType,boolean>([
+        [TitleType.Frontmatter, cache.frontmatter !== null && frontmatter !== cache.frontmatter ],
+        [TitleType.Heading, cache.heading !== null && heading !== cache.heading],
+      ]);
+      if (this.settings.syncHeading.has(TitleType.Frontmatter as string)
+          && this.settings.syncFrontmatter.has(TitleType.Heading as string)
+          && Array.from(changed.values()).every(Boolean)) {
+        // Two way content sync and both changed. Precedence applies in this case
+        await this.syncTitle(file, precedence, nonPrecedence);
+        changed.set(nonPrecedence, false)
+        // Now content is synced and just one of the following steps is executed
+      }
+      if (changed.get(TitleType.Heading)) {
+        const file0 = file.path
+        if (this.settings.syncHeading.has(TitleType.Frontmatter as string)) {
+          await this.setTitle(file, heading, TitleType.Frontmatter);
+        }
+        const file1 = file.path
+        // Order is important. Filename needs to be changed last
+        if (this.settings.syncHeading.has(TitleType.Filename as string)) {
+          await this.setTitle(file, heading, TitleType.Filename);
+        }
+        const file2 = file.path
+      }
+      if (changed.get(TitleType.Frontmatter)) {
+        if (this.settings.syncFrontmatter.has(TitleType.Heading as string)) {
+          await this.setTitle(file, frontmatter, TitleType.Heading);
+        }
+        // Order is important. Filename needs to be changed last
+        if (this.settings.syncFrontmatter.has(TitleType.Filename as string)) {
+          await this.setTitle(file, frontmatter, TitleType.Filename);
+        }
+      }
+      this.titleCache.setFromFile(file, this);
+    });
+    this.isRenameInProgress = false
   }
 
   /**
-   * Syncs the current filename to the first heading
+   * Syncs the current filename to the content
    * Finds the first heading of the file, then replaces it with the filename
    *
    * @param      {TAbstractFile}  file     The file that fired the event
    * @param      {string}         oldPath  The old path
    */
-  handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
+  async handleSyncFromFilename(file: TAbstractFile, oldPath: string) {
     if (this.isRenameInProgress) {
       return;
     }
@@ -242,8 +376,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    const targetType = this.settings.frontmatterTitle ? TitleType.Frontmatter : TitleType.Heading;
-    this.syncTitle(file, TitleType.Filename, targetType);
+    this.settings.syncFilename.forEach(async (key) => {
+      await this.syncTitle(file, TitleType.Filename, key as TitleType);
+    });
+    this.titleCache.setFromFile(file, this);
   }
 
   /**
@@ -252,8 +388,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param      {TitleType}      source   The source
    * @param      {TitleType}      target   The target
    */
-  syncTitle(file: TFile, source: TitleType, target: TitleType) {
-    this.getTitle(file, source).then((title) => this.setTitle(file, title, target))
+  async syncTitle(file: TFile, source: TitleType, target: TitleType) {
+    return this.getTitle(file, source).then((title) => {
+      if (title !== null) { this.setTitle(file, title, target)}
+    })
   }
 
   /**
@@ -263,16 +401,21 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param      {TitleType}      target   The target
    */
   async setTitle(file: TFile, title: string, target: TitleType): Promise<void> {
+    this.isRenameInProgress = true;
     if (target == TitleType.Filename) {
         if (title.length > 0 && this.sanitizeHeading(file.basename) !== title) {
           const newPath = `${file.parent.path}/${title}.md`;
-          this.isRenameInProgress = true;
-          await this.app.fileManager.renameFile(file, newPath);
-          this.isRenameInProgress = false;
+          const oldPath = file.path;
+          try {
+            await this.app.fileManager.renameFile(file, newPath);
+            this.titleCache.move(oldPath, newPath);
+          } catch (e) {
+            (new Notice(`Failed to rename ${file.path} to ${newPath}`));
+          }
         }
         return
     }
-    this.app.vault.read(file).then((data) => {
+    await this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
       switch(target) {
         case TitleType.Frontmatter:
@@ -310,6 +453,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           } else this.insertHeading(file, lines, start, title);
       }
     })
+    this.isRenameInProgress = false;
   }
 
   /**
@@ -318,7 +462,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {TitleType} source type
    * @returns {Promise<string>} the title
    */
-  async getTitle(file: TFile, source: TitleType): Promise<string> {
+  async getTitle(file: TFile, source: TitleType): Promise<string | null> {
     var title: string = null
 
     if (source === TitleType.Filename) {
@@ -327,12 +471,15 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       const lines = await this.app.vault.read(file).then((data) => data.split('\n'));
       switch(source) {
         case TitleType.Frontmatter:
-          title = this.findFrontmatterTitle(lines).text;
+          title = this.findFrontmatterTitle(lines)?.text;
           break;
         case TitleType.Heading:
-          title = this.findHeading(lines, this.findNoteStart(lines)).text;
+          title = this.findHeading(lines, this.findNoteStart(lines))?.text;
           break;
       }
+    }
+    if (!title) {
+      return null
     }
     title = this.sanitizeHeading(title);
     return title;
@@ -614,10 +761,17 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings.syncFilename = new Set<string>(this.settings.syncFilename);
+    this.settings.syncHeading = new Set<string>(this.settings.syncHeading);
+    this.settings.syncFrontmatter = new Set<string>(this.settings.syncFrontmatter);
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    let settings = Object.assign({}, this.settings);
+    settings.syncFilename = Array.from(settings.syncFilename);
+    settings.syncHeading = Array.from(settings.syncHeading);
+    settings.syncFrontmatter = Array.from(settings.syncFrontmatter);
+    await this.saveData(settings);
   }
 
 }
@@ -735,10 +889,91 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+    containerEl.createEl('h2', { text: 'Automatic Synchronization' });
+
     new Setting(containerEl)
-      .setName("Use Frontmatter instead of heading")
+      .setName('Filename →')
       .setDesc(
-        "Whether this plugin should use the title field in frontmatter instead of the heading.",
+        "Synchronize the filename to: (Filename), Heading, Front Matter"
+      )
+      .addToggle((toggle) => toggle.setTooltip("Filename").setDisabled(true).setValue(true))
+      .addToggle((toggle) => toggle.setTooltip("Heading")
+                 .setValue(this.plugin.settings.syncFilename.has(TitleType.Heading))
+                 .onChange(async (value) => {
+                   if (value) {
+                     this.plugin.settings.syncFilename.add(TitleType.Heading);
+                   } else {
+                     this.plugin.settings.syncFilename.delete(TitleType.Heading);
+                   }
+                   await this.plugin.saveSettings();
+                 }))
+      .addToggle((toggle) => toggle.setTooltip("Front Matter")
+                 .setValue(this.plugin.settings.syncFilename.has(TitleType.Frontmatter))
+                 .onChange(async (value) => {
+                   if (value) {
+                     this.plugin.settings.syncFilename.add(TitleType.Frontmatter);
+                   } else {
+                     this.plugin.settings.syncFilename.delete(TitleType.Frontmatter);
+                   }
+                   await this.plugin.saveSettings();
+                 }))
+    new Setting(containerEl)
+      .setName('Heading →')
+      .setDesc(
+        "Synchronize the heading to: Filename, (Heading), Front Matter"
+      )
+      .addToggle((toggle) => toggle.setTooltip("Filename")
+                .setValue(this.plugin.settings.syncHeading.has(TitleType.Filename))
+                .onChange(async (value) => {
+                  if (value) {
+                    this.plugin.settings.syncHeading.add(TitleType.Filename);
+                  } else {
+                    this.plugin.settings.syncHeading.delete(TitleType.Filename);
+                  }
+                  await this.plugin.saveSettings();
+                }))
+      .addToggle((toggle) => toggle.setTooltip("Heading").setDisabled(true).setValue(true))
+      .addToggle((toggle) => toggle.setTooltip("Front Matter")
+                .setValue(this.plugin.settings.syncHeading.has(TitleType.Frontmatter))
+                .onChange(async (value) => {
+                  if (value) {
+                    this.plugin.settings.syncHeading.add(TitleType.Frontmatter);
+                  } else {
+                    this.plugin.settings.syncHeading.delete(TitleType.Frontmatter);
+                  }
+                  await this.plugin.saveSettings();
+                }))
+    new Setting(containerEl)
+      .setName('Front Matter →')
+      .setDesc(
+        "Synchronize the front matter to: Filename, Heading, (Front Matter)"
+      )
+      .addToggle((toggle) => toggle.setTooltip("Filename")
+                .setValue(this.plugin.settings.syncFrontmatter.has(TitleType.Filename))
+                .onChange(async (value) => {
+                  if (value) {
+                    this.plugin.settings.syncFrontmatter.add(TitleType.Filename);
+                  }else {
+                    this.plugin.settings.syncFrontmatter.delete(TitleType.Filename);
+                  }
+                  await this.plugin.saveSettings();
+                }))
+      .addToggle((toggle) => toggle.setTooltip("Heading")
+                .setValue(this.plugin.settings.syncFrontmatter.has(TitleType.Heading))
+                .onChange(async (value) => {
+                  if (value) {
+                    this.plugin.settings.syncFrontmatter.add(TitleType.Heading);
+                  } else {
+                    this.plugin.settings.syncFrontmatter.delete(TitleType.Heading);
+                  }
+                  await this.plugin.saveSettings();
+                }))
+      .addToggle((toggle) => toggle.setTooltip("Front Matter").setDisabled(true).setValue(true))
+
+    new Setting(containerEl)
+      .setName("Use front matter instead of heading")
+      .setDesc(
+        "Whether this plugin should use the title field in front matter instead of the heading.",
       )
       .addToggle((toggle) =>
         toggle
@@ -749,6 +984,22 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             frontmatterTitleSetting.setDisabled(!this.plugin.settings.frontmatterTitle);
           }),
       );
+      new Setting(containerEl)
+        .setName("Content Precedence")
+        .setDesc(
+          "Which change should take precedence if both the front matter and the heading changed. (Currently it is not possible to get the last change or similar)"
+        )
+        .addDropdown((dropdown) =>
+          dropdown
+            .addOption('frontmatter', "Front Matter")
+            .addOption('heading', "Heading")
+            .setValue(this.plugin.settings.contentPrecedence)
+            .onChange(async (value) => {
+              this.plugin.settings.contentPrecedence = value;
+              await this.plugin.saveSettings();
+            }))
+
+    containerEl.createEl('h2', { text: 'Front Matter' });
     frontmatterTitleSetting = new Setting(containerEl)
       .setName("Key in frontmatter to use")
       .setDesc(
@@ -764,6 +1015,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       )
       .setDisabled(!this.plugin.settings.frontmatterTitle);
 
+    containerEl.createEl('h2', { text: 'Heading Style' });
     new Setting(containerEl)
       .setName('New Heading Style')
       .setDesc(
