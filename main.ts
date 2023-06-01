@@ -41,7 +41,6 @@ interface FilenameHeadingSyncPluginSettings {
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
   underlineString: string;
-  frontmatterTitle: boolean;
   frontmatterTitleKey: string;
   contentPrecedence: string;
   syncFilename: Set<string>;
@@ -121,7 +120,6 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
-  frontmatterTitle: false,
   frontmatterTitleKey: 'title',
   contentPrecedence: 'frontmatter',
   syncFilename: new Set(['heading']),
@@ -970,20 +968,6 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
                 }))
       .addToggle((toggle) => toggle.setTooltip("Front Matter").setDisabled(true).setValue(true))
 
-    new Setting(containerEl)
-      .setName("Use front matter instead of heading")
-      .setDesc(
-        "Whether this plugin should use the title field in front matter instead of the heading.",
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.frontmatterTitle)
-          .onChange(async (value) => {
-            this.plugin.settings.frontmatterTitle = value;
-            await this.plugin.saveSettings();
-            frontmatterTitleSetting.setDisabled(!this.plugin.settings.frontmatterTitle);
-          }),
-      );
       new Setting(containerEl)
         .setName("Content Precedence")
         .setDesc(
@@ -1012,8 +996,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             this.plugin.settings.frontmatterTitleKey = value;
             await this.plugin.saveSettings();
           }),
-      )
-      .setDisabled(!this.plugin.settings.frontmatterTitle);
+      );
 
     containerEl.createEl('h2', { text: 'Heading Style' });
     new Setting(containerEl)
