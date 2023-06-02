@@ -27,7 +27,7 @@ interface LinePointer {
 interface FilenameHeadingSyncPluginSettings {
   userIllegalSymbols: string[];
   ignoreRegex: string;
-  ignoredFiles: { [key: string]: null };
+  ignoredFiles: { [key: string]: null; };
   useFileOpenHook: boolean;
   useFileSaveHook: boolean;
   newHeadingStyle: HeadingStyle;
@@ -50,7 +50,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   isRenameInProgress: boolean = false;
   settings: FilenameHeadingSyncPluginSettings;
 
-  async onload() {
+  async onload () {
     await this.loadSettings();
 
     this.registerEvent(
@@ -111,7 +111,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     });
   }
 
-  fileIsIgnored(activeFile: TFile, path: string): boolean {
+  fileIsIgnored (activeFile: TFile, path: string): boolean {
     // check exclusions
     if (isExcluded(this.app, activeFile)) {
       return true;
@@ -140,7 +140,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    *
    * @param      {TAbstractFile}  file    The file
    */
-  handleSyncHeadingToFile(file: TAbstractFile) {
+  handleSyncHeadingToFile (file: TAbstractFile) {
     if (!(file instanceof TFile)) {
       return;
     }
@@ -164,7 +164,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncHeadingToFilename(file);
   }
 
-  forceSyncHeadingToFilename(file: TFile) {
+  forceSyncHeadingToFilename (file: TFile) {
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -192,7 +192,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param      {TAbstractFile}  file     The file that fired the event
    * @param      {string}         oldPath  The old path
    */
-  handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
+  handleSyncFilenameToHeading (file: TAbstractFile, oldPath: string) {
     if (this.isRenameInProgress) {
       return;
     }
@@ -226,7 +226,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncFilenameToHeading(file);
   }
 
-  forceSyncFilenameToHeading(file: TFile) {
+  forceSyncFilenameToHeading (file: TFile) {
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
@@ -253,7 +253,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {string[]} fileLines array of the file's contents, line by line
    * @returns {number} zero-based index of the starting line of the note
    */
-  findNoteStart(fileLines: string[]) {
+  findNoteStart (fileLines: string[]) {
     // check for frontmatter by checking if first line is a divider ('---')
     if (fileLines[0] === '---') {
       // find end of frontmatter
@@ -265,6 +265,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         }
       }
     }
+    // Support Lila's frontmatter
+    else if (/`\s*((class|cls):\s*|\.)meta\s*`/g.test(fileLines[0].trim())) {
+      for (let i = 1; i < fileLines.length; i++) {
+        if (!fileLines[i].trim().startsWith("-")) {
+          // end of frontmatter found, next line is start of note
+          return i;
+        }
+      }
+      return fileLines.length;
+    }
     return 0;
   }
 
@@ -275,7 +285,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {number} startLine zero-based index of the starting line of the note
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
-  findHeading(fileLines: string[], startLine: number): LinePointer | null {
+  findHeading (fileLines: string[], startLine: number): LinePointer | null {
     for (let i = startLine; i < fileLines.length; i++) {
       if (fileLines[i].startsWith('# ')) {
         return {
@@ -299,11 +309,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return null; // no heading found
   }
 
-  regExpEscape(str: string): string {
+  regExpEscape (str: string): string {
     return String(str).replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
   }
 
-  sanitizeHeading(text: string) {
+  sanitizeHeading (text: string) {
     // stockIllegalSymbols is a regExp object, but userIllegalSymbols is a list of strings and therefore they are handled separately.
     text = text.replace(stockIllegalSymbols, '');
 
@@ -456,7 +466,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {number} lineNumber zero-based index of the line to replace
    * @param {string} text the new text
    */
-  replaceLineInFile(
+  replaceLineInFile (
     file: TFile,
     fileLines: string[],
     lineNumber: number,
@@ -481,7 +491,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {number} lineNumber zero-based index of where the line should be inserted
    * @param {string} text the text that the line shall contain
    */
-  insertLineInFile(
+  insertLineInFile (
     file: TFile,
     fileLines: string[],
     lineNumber: number,
@@ -496,11 +506,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.app.vault.modify(file, data);
   }
 
-  async loadSettings() {
+  async loadSettings () {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
-  async saveSettings() {
+  async saveSettings () {
     await this.saveData(this.settings);
   }
 }
@@ -509,13 +519,13 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
   plugin: FilenameHeadingSyncPlugin;
   app: App;
 
-  constructor(app: App, plugin: FilenameHeadingSyncPlugin) {
+  constructor (app: App, plugin: FilenameHeadingSyncPlugin) {
     super(app, plugin);
     this.plugin = plugin;
     this.app = app;
   }
 
-  display(): void {
+  display (): void {
     let { containerEl } = this;
     let regexIgnoredFilesDiv: HTMLDivElement;
 
