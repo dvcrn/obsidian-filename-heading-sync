@@ -519,7 +519,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     let { containerEl } = this;
     let regexIgnoredFilesDiv: HTMLDivElement;
 
-    const renderRegexIgnoredFiles = (div: HTMLElement) => {
+    const renderRegexIgnoredFiles =  (div: HTMLElement) => {
       // empty existing div
       div.innerHTML = '';
 
@@ -528,11 +528,13 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       }
 
       try {
-        const files = this.app.vault.getFiles();
+        const files = this.app.vault.getMarkdownFiles();
         const reg = new RegExp(this.plugin.settings.ignoreRegex);
 
+        const pathes:string[] = [];
         files
           .filter((file) => reg.exec(file.path) !== null)
+          .slice(0,100)
           .forEach((el) => {
             new Setting(div).setDesc(el.path);
           });
@@ -670,7 +672,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
     containerEl.createEl('p', {
-      text: 'All files matching the above RegEx will get listed here',
+      text: 'The first 100(if show all, it maybe freezen) files matching the above RegEx will get listed here',
     });
 
     regexIgnoredFilesDiv = containerEl.createDiv('test');
