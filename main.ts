@@ -33,6 +33,7 @@ interface FilenameHeadingSyncPluginSettings {
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
   underlineString: string;
+  maxLinesFindHeading: number;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
+  maxLinesFindHeading: -1,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -276,7 +278,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
   findHeading(fileLines: string[], startLine: number): LinePointer | null {
-    for (let i = startLine; i < fileLines.length; i++) {
+    let maxlines = this.settings.maxLinesFindHeading;
+    maxlines = maxlines=== -1 ? 
+      fileLines.length:
+      Math.min(fileLines.length, startLine+maxlines);
+    for (let i = startLine; i < maxlines; i++) {
       if (fileLines[i].startsWith('# ')) {
         return {
           lineNumber: i,
@@ -567,6 +573,32 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.userIllegalSymbols = value.split(',');
             await this.plugin.saveSettings();
+          }),
+      );
+
+      new Setting(containerEl)
+      .setName('Max Lines to Finding Head')
+      .setDesc(
+        'Max Lines to Finding Head after front matter.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('-1')
+          .setValue(this.plugin.settings.maxLinesFindHeading.toString())
+          .onChange(async (value) => {
+            try {
+              const newValue = parseInt(value)+0;
+              if(newValue >= -1){
+                this.plugin.settings.maxLinesFindHeading = newValue;
+                await this.plugin.saveSettings();
+              }else{
+                window.setTimeout(()=>{
+                  text.setValue(this.plugin.settings.maxLinesFindHeading.toString())
+                }, 560);
+              }
+            } catch {
+            }
+            // text.setValue(this.plugin.settings.maxLinesFindHeading.toString())
           }),
       );
 
