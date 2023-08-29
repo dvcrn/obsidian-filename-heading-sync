@@ -704,7 +704,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
     containerEl.createEl('p', {
-      text: 'The first 100(if show all, it maybe freezen) files matching the above RegEx will get listed here',
+      text: 'The first 100 files matching the above RegEx will get listed here',
     });
 
     regexIgnoredFilesDiv = containerEl.createDiv('test');
