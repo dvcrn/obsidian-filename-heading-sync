@@ -577,7 +577,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       );
 
       new Setting(containerEl)
-      .setName('Max Lines to Finding Head')
+      .setName('Max lines to search for heading')
       .setDesc(
         'Max Lines to Finding Head after front matter. Default set -1 will find all lines after front matter',
       )
