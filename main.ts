@@ -33,6 +33,7 @@ interface FilenameHeadingSyncPluginSettings {
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
   underlineString: string;
+  maxLinesFindHeading: number;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
+  maxLinesFindHeading: -1,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -276,7 +278,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
   findHeading(fileLines: string[], startLine: number): LinePointer | null {
-    for (let i = startLine; i < fileLines.length; i++) {
+    let maxlines = this.settings.maxLinesFindHeading;
+    maxlines = maxlines=== -1 ? 
+      fileLines.length:
+      Math.min(fileLines.length, startLine+maxlines);
+    for (let i = startLine; i < maxlines; i++) {
       if (fileLines[i].startsWith('# ')) {
         return {
           lineNumber: i,
@@ -519,7 +525,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     let { containerEl } = this;
     let regexIgnoredFilesDiv: HTMLDivElement;
 
-    const renderRegexIgnoredFiles = (div: HTMLElement) => {
+    const renderRegexIgnoredFiles =  (div: HTMLElement) => {
       // empty existing div
       div.innerHTML = '';
 
@@ -528,11 +534,13 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       }
 
       try {
-        const files = this.app.vault.getFiles();
+        const files = this.app.vault.getMarkdownFiles();
         const reg = new RegExp(this.plugin.settings.ignoreRegex);
 
+        const pathes:string[] = [];
         files
           .filter((file) => reg.exec(file.path) !== null)
+          .slice(0,100)
           .forEach((el) => {
             new Setting(div).setDesc(el.path);
           });
@@ -565,6 +573,32 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.userIllegalSymbols = value.split(',');
             await this.plugin.saveSettings();
+          }),
+      );
+
+      new Setting(containerEl)
+      .setName('Max lines to search for heading')
+      .setDesc(
+        'The maximum amount of lines to check for a heading, after frontmatter. -1 (default) will check all lines of the document ',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('-1')
+          .setValue(this.plugin.settings.maxLinesFindHeading.toString())
+          .onChange(async (value) => {
+            try {
+              const newValue = parseInt(value)+0;
+              if(newValue >= -1){
+                this.plugin.settings.maxLinesFindHeading = newValue;
+                await this.plugin.saveSettings();
+              }else{
+                window.setTimeout(()=>{
+                  text.setValue(this.plugin.settings.maxLinesFindHeading.toString())
+                }, 560);
+              }
+            } catch {
+            }
+            // text.setValue(this.plugin.settings.maxLinesFindHeading.toString())
           }),
       );
 
@@ -670,7 +704,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
     containerEl.createEl('p', {
-      text: 'All files matching the above RegEx will get listed here',
+      text: 'The first 100 files matching the above RegEx will get listed here',
     });
 
     regexIgnoredFilesDiv = containerEl.createDiv('test');
