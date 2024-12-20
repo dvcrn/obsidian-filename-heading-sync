@@ -115,5 +115,26 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(result?.style).toBe('Prefix');
       expect(result?.lineNumber).toBe(1);
     });
+
+    it('should ignore heading inside frontmatter', () => {
+      const fileLines = [
+        '---',
+        '# Not a heading',
+        'title: Test',
+        '---',
+        '# Actual Heading',
+        'Some content',
+      ];
+
+      const result = plugin.findHeading(
+        fileLines,
+        plugin.findNoteStart(fileLines),
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.text).toBe('Actual Heading');
+      expect(result?.style).toBe('Prefix');
+      expect(result?.lineNumber).toBe(4);
+    });
   });
 });
