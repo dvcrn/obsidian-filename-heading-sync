@@ -14,7 +14,7 @@ import { isExcluded } from './exclusions';
 const stockIllegalSymbols = /[\\/:|#^[\]]/g;
 
 // Must be Strings unless settings dialog is updated.
-export const enum HeadingStyle {
+const enum HeadingStyle {
   Prefix = 'Prefix',
   Underline = 'Underline',
 }

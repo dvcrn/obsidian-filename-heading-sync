@@ -1,9 +1,6 @@
 import FilenameHeadingSyncPlugin from './main';
 import { App, PluginManifest } from 'obsidian';
 
-// Import HeadingStyle enum from main.ts
-import { HeadingStyle } from './main';
-
 describe('FilenameHeadingSyncPlugin', () => {
   let plugin: FilenameHeadingSyncPlugin;
   let app: App;
