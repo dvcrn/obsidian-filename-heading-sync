@@ -7,6 +7,7 @@ import {
   TFile,
   Editor,
   MarkdownView,
+  PluginManifest,
 } from 'obsidian';
 import { isExcluded } from './exclusions';
 
@@ -85,9 +86,10 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         let leaf = this.app.workspace.activeLeaf;
         if (leaf) {
           if (!checking) {
-            this.settings.ignoredFiles[
-              this.app.workspace.getActiveFile().path
-            ] = null;
+            const activeFile = this.app.workspace.getActiveFile();
+            if (activeFile) {
+              this.settings.ignoredFiles[activeFile.path] = null;
+            }
             this.saveSettings();
           }
           return true;
@@ -125,7 +127,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     // check regex
     try {
       if (this.settings.ignoreRegex === '') {
-        return;
+        return false;
       }
 
       const reg = new RegExp(this.settings.ignoreRegex);
@@ -276,27 +278,57 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @returns {LinePointer | null} LinePointer to heading or null if no heading found
    */
   findHeading(fileLines: string[], startLine: number): LinePointer | null {
+    let insideCodeBlock = false;
+
     for (let i = startLine; i < fileLines.length; i++) {
-      if (fileLines[i].startsWith('# ')) {
-        return {
-          lineNumber: i,
-          text: fileLines[i].substring(2),
-          style: HeadingStyle.Prefix,
-        };
-      } else {
-        if (
-          fileLines[i + 1] !== undefined &&
-          fileLines[i + 1].match(/^=+$/) !== null
-        ) {
+      const line = fileLines[i].trimEnd(); // Trim end to handle spaces after backticks
+
+      // Check for fenced code block markers (allowing for indentation)
+      if (line.trim().startsWith('```')) {
+        insideCodeBlock = !insideCodeBlock;
+        continue;
+      }
+
+      // Skip if inside code block
+      if (insideCodeBlock) {
+        continue;
+      }
+
+      // Check for prefix style heading, ignoring escaped hashes and inline code
+      if (line.startsWith('# ')) {
+        // Skip if the line is inside inline code (has odd number of backticks before #)
+        const backtickCount = (line.match(/`/g) || []).length;
+        if (backtickCount % 2 === 0) {
+          // Skip if the # is escaped with \
+          if (!line.startsWith('\\# ')) {
+            return {
+              lineNumber: i,
+              text: line.substring(2),
+              style: HeadingStyle.Prefix,
+            };
+          }
+        }
+      }
+
+      // Check for underline style heading
+      if (
+        fileLines[i + 1] !== undefined &&
+        fileLines[i + 1].trim().match(/^=+$/) !== null &&
+        line.length > 0 // Ensure the heading line isn't empty
+      ) {
+        // Skip if the line is inside inline code
+        const backtickCount = (line.match(/`/g) || []).length;
+        if (backtickCount % 2 === 0) {
           return {
             lineNumber: i,
-            text: fileLines[i],
+            text: line,
             style: HeadingStyle.Underline,
           };
         }
       }
     }
-    return null; // no heading found
+
+    return null; // no valid heading found outside code blocks
   }
 
   regExpEscape(str: string): string {
@@ -545,12 +577,10 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Filename Heading Sync' });
     containerEl.createEl('p', {
-      text:
-        'This plugin will overwrite the first heading found in a file with the filename.',
+      text: 'This plugin will overwrite the first heading found in a file with the filename.',
     });
     containerEl.createEl('p', {
-      text:
-        'If no header is found, will insert a new one at the first line (after frontmatter).',
+      text: 'If no header is found, will insert a new one at the first line (after frontmatter).',
     });
 
     new Setting(containerEl)
@@ -678,8 +708,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'Manually Ignored Files' });
     containerEl.createEl('p', {
-      text:
-        'You can ignore files from this plugin by using the "ignore this file" command',
+      text: 'You can ignore files from this plugin by using the "ignore this file" command',
     });
 
     // go over all ignored files and add them

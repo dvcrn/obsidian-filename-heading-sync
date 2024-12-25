@@ -12,9 +12,7 @@ export function isExcalidraw(app: App, f: TFile) {
 
 export function isKanban(app: App, f: TFile) {
   const fileCache = app.metadataCache.getFileCache(f);
-  return (
-    !!fileCache?.frontmatter && !!fileCache.frontmatter['kanban-plugin']
-  );
+  return !!fileCache?.frontmatter && !!fileCache.frontmatter['kanban-plugin'];
 }
 
 export function isExcluded(app: App, f: TFile) {
@@ -24,6 +22,6 @@ export function isExcluded(app: App, f: TFile) {
   if (isKanban(app, f)) {
     return true;
   }
-  
+
   return false;
 }
