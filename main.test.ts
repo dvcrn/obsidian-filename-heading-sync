@@ -7,7 +7,7 @@ describe('FilenameHeadingSyncPlugin', () => {
 
   beforeEach(() => {
     // Create a proper mock of the App class
-    app = ({
+    app = {
       vault: {
         on: jest.fn(),
         getFiles: jest.fn().mockReturnValue([]),
@@ -18,7 +18,7 @@ describe('FilenameHeadingSyncPlugin', () => {
       },
       fileManager: {},
       // Add other required App properties
-    } as unknown) as App;
+    } as unknown as App;
 
     const manifest: PluginManifest = {
       id: 'test',
