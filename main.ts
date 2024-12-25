@@ -30,6 +30,7 @@ interface FilenameHeadingSyncPluginSettings {
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
   useFileOpenHook: boolean;
+  useDatePrefix: boolean;
   useFileSaveHook: boolean;
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
@@ -41,6 +42,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   ignoredFiles: {},
   ignoreRegex: '',
   useFileOpenHook: true,
+  useDatePrefix: false,
   useFileSaveHook: true,
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
@@ -175,11 +177,15 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       if (heading === null) return; // no heading found, nothing to do here
 
       const sanitizedHeading = this.sanitizeHeading(heading.text);
+      let expectedFilename = sanitizedHeading;
+      if (this.settings.useDatePrefix) {
+        expectedFilename = new Date(file.stat.ctime).toISOString().split("T")[0].replace(/-/g,'').substr(2) + " - " + sanitizedHeading;
+      }
       if (
         sanitizedHeading.length > 0 &&
-        this.sanitizeHeading(file.basename) !== sanitizedHeading
+        this.sanitizeHeading(file.basename) !== expectedFilename
       ) {
-        const newPath = `${file.parent.path}/${sanitizedHeading}.md`;
+        const newPath = `${file.parent.path}/${expectedFilename}.md`;
         this.isRenameInProgress = true;
         await this.app.fileManager.renameFile(file, newPath);
         this.isRenameInProgress = false;
@@ -635,15 +641,15 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Use File Save Hook')
+      .setName('Use timestamp as prefix')
       .setDesc(
-        'Whether this plugin should trigger when a file is saved. Disable this when you want to trigger sync only manually.',
+        'Add date prefix in the YYMMDD format to filename.',
       )
       .addToggle((toggle) =>
         toggle
-          .setValue(this.plugin.settings.useFileSaveHook)
+          .setValue(this.plugin.settings.useDatePrefix)
           .onChange(async (value) => {
-            this.plugin.settings.useFileSaveHook = value;
+            this.plugin.settings.useDatePrefix = value;
             await this.plugin.saveSettings();
           }),
       );
