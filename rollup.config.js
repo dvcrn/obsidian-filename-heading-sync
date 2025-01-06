@@ -5,7 +5,7 @@ import commonjs from '@rollup/plugin-commonjs';
 export default {
   input: 'main.ts',
   output: {
-    dir: '.',
+    dir: '/Users/david/Obsidian/Primary/.obsidian/plugins/obsidian-filename-heading-sync',
     sourcemap: 'inline',
     format: 'cjs',
     exports: 'default'

@@ -166,7 +166,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncHeadingToFilename(file);
   }
 
-  forceSyncHeadingToFilename(file: TFile) {
+  forceSyncHeadingToFilename(file: TFile | null) {
+    if (file === null) {
+      return;
+    }
+
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -179,7 +183,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         sanitizedHeading.length > 0 &&
         this.sanitizeHeading(file.basename) !== sanitizedHeading
       ) {
-        const newPath = `${file.parent.path}/${sanitizedHeading}.md`;
+        const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
         this.isRenameInProgress = true;
         await this.app.fileManager.renameFile(file, newPath);
         this.isRenameInProgress = false;
@@ -228,7 +232,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncFilenameToHeading(file);
   }
 
-  forceSyncFilenameToHeading(file: TFile) {
+  forceSyncFilenameToHeading(file: TFile | null) {
+    if (file === null) {
+      return;
+    }
+
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
