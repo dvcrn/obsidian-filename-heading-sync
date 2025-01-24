@@ -81,7 +81,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       // Register all handlers
       handlers.forEach((h) =>
         this.app.workspace.on(h.event as any, () => {
-          console.log(`[filename-heading-sync] templater event ${h.event} fired, cleaning up`);
+          console.log(
+            `[filename-heading-sync] templater event ${h.event} fired, cleaning up`,
+          );
           h.fn();
         }),
       );
