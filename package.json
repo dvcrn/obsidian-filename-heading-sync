@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Obsidian plugin for keeping the filename with the first heading of a file in sync",
   "main": "main.js",
+  "type": "module",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
     "build": "rollup --config rollup.config.js",
