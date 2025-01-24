@@ -51,20 +51,70 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   isRenameInProgress: boolean = false;
   settings: FilenameHeadingSyncPluginSettings;
 
+  async waitForTemplater() {
+    const templaterEnabled = (this.app as any).plugins.enabledPlugins.has(
+      'templater-obsidian',
+    );
+
+    if (!templaterEnabled) {
+      return;
+    }
+
+    const templaterEvents = [
+      'templater:new-note-from-template',
+      'templater:template-appended',
+      'templater:overwrite-file',
+    ];
+
+    return new Promise((resolve) => {
+      // Create one-time event handlers that clean themselves up
+      const handlers = templaterEvents.map((event) => {
+        const handler = () => {
+          // Remove all handlers when any event fires
+          handlers.forEach((h) => this.app.workspace.off(h.event, h.fn));
+          resolve(true);
+        };
+
+        return { event, fn: handler };
+      });
+
+      // Register all handlers
+      handlers.forEach((h) =>
+        this.app.workspace.on(h.event as any, () => {
+          console.log(
+            `[filename-heading-sync] templater event ${h.event} fired, cleaning up`,
+          );
+          h.fn();
+        }),
+      );
+
+      // Timeout fallback that also cleans up
+      setTimeout(() => {
+        handlers.forEach((h) => this.app.workspace.off(h.event, h.fn));
+        resolve(true);
+      }, 100);
+    });
+  }
+
   async onload() {
     await this.loadSettings();
 
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) => {
         if (this.settings.useFileSaveHook) {
-          return this.handleSyncFilenameToHeading(file, oldPath);
+          this.waitForTemplater().then(() => {
+            return this.handleSyncFilenameToHeading(file, oldPath);
+          });
         }
       }),
     );
+
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
         if (this.settings.useFileSaveHook) {
-          return this.handleSyncHeadingToFile(file);
+          this.waitForTemplater().then(() => {
+            return this.handleSyncHeadingToFile(file);
+          });
         }
       }),
     );
@@ -72,7 +122,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', (file) => {
         if (this.settings.useFileOpenHook && file !== null) {
-          return this.handleSyncFilenameToHeading(file, file.path);
+          this.waitForTemplater().then(() => {
+            return this.handleSyncFilenameToHeading(file, file.path);
+          });
         }
       }),
     );
@@ -166,7 +218,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncHeadingToFilename(file);
   }
 
-  forceSyncHeadingToFilename(file: TFile) {
+  forceSyncHeadingToFilename(file: TFile | null) {
+    if (file === null) {
+      return;
+    }
+
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -179,7 +235,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         sanitizedHeading.length > 0 &&
         this.sanitizeHeading(file.basename) !== sanitizedHeading
       ) {
-        const newPath = `${file.parent.path}/${sanitizedHeading}.md`;
+        const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
         this.isRenameInProgress = true;
         await this.app.fileManager.renameFile(file, newPath);
         this.isRenameInProgress = false;
@@ -228,7 +284,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncFilenameToHeading(file);
   }
 
-  forceSyncFilenameToHeading(file: TFile) {
+  forceSyncFilenameToHeading(file: TFile | null) {
+    if (file === null) {
+      return;
+    }
+
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
