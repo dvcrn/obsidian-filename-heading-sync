@@ -218,10 +218,20 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncHeadingToFilename(file);
   }
 
-  forceSyncHeadingToFilename(file: TFile | null) {
+  async ensureFileSaved(file: TFile) {
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      if (leaf.view instanceof MarkdownView && leaf.view.file === file && leaf.view.dirty) {
+        await leaf.view.save();
+      }
+    }
+  }
+
+  async forceSyncHeadingToFilename(file: TFile | null) {
     if (file === null) {
       return;
     }
+
+    await this.ensureFileSaved(file);
 
     this.app.vault.read(file).then(async (data) => {
       const lines = data.split('\n');
@@ -284,10 +294,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncFilenameToHeading(file);
   }
 
-  forceSyncFilenameToHeading(file: TFile | null) {
+  async forceSyncFilenameToHeading(file: TFile | null) {
     if (file === null) {
       return;
     }
+
+    await this.ensureFileSaved(file);
 
     const sanitizedHeading = this.sanitizeHeading(file.basename);
     this.app.vault.read(file).then((data) => {
