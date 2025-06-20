@@ -220,7 +220,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
   async ensureFileSaved(file: TFile) {
     for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
-      if (leaf.view instanceof MarkdownView && leaf.view.file === file && leaf.view.dirty) {
+      if (
+        leaf.view instanceof MarkdownView &&
+        leaf.view.file === file &&
+        leaf.view.dirty
+      ) {
         await leaf.view.save();
       }
     }
