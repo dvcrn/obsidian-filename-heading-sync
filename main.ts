@@ -187,7 +187,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       const reg = new RegExp(this.settings.ignoreRegex);
       return reg.exec(path) !== null;
-    } catch { }
+    } catch {}
 
     return false;
   }
