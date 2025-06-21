@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nr test)",
+      "Bash(nr format)"
+    ],
+    "deny": []
+  }
+}

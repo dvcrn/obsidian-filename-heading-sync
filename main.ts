@@ -34,6 +34,7 @@ interface FilenameHeadingSyncPluginSettings {
   newHeadingStyle: HeadingStyle;
   replaceStyle: boolean;
   underlineString: string;
+  renameDebounceTimeout: number;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -45,11 +46,13 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
+  renameDebounceTimeout: 1000,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
   isRenameInProgress: boolean = false;
   settings: FilenameHeadingSyncPluginSettings;
+  renameDebounceTimer: NodeJS.Timeout | null = null;
 
   async waitForTemplater() {
     const templaterEnabled = (this.app as any).plugins.enabledPlugins.has(
@@ -215,7 +218,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
-    this.forceSyncHeadingToFilename(file);
+    // Clear any existing debounce timer
+    if (this.renameDebounceTimer) {
+      clearTimeout(this.renameDebounceTimer);
+    }
+
+    // Set a new debounce timer
+    this.renameDebounceTimer = setTimeout(() => {
+      this.forceSyncHeadingToFilename(file);
+      this.renameDebounceTimer = null;
+    }, this.settings.renameDebounceTimeout);
   }
 
   async ensureFileSaved(file: TFile) {
@@ -611,6 +623,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
   }
+
+  onunload() {
+    // Clear any pending debounce timer
+    if (this.renameDebounceTimer) {
+      clearTimeout(this.renameDebounceTimer);
+      this.renameDebounceTimer = null;
+    }
+  }
 }
 
 class FilenameHeadingSyncSettingTab extends PluginSettingTab {
@@ -771,6 +791,24 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.underlineString = value;
             await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Rename Debounce Timeout')
+      .setDesc(
+        'Delay in milliseconds before renaming the file after typing stops. This prevents frequent renames while typing. Default is 1000ms (2 seconds).',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('1000')
+          .setValue(String(this.plugin.settings.renameDebounceTimeout))
+          .onChange(async (value) => {
+            const numValue = parseInt(value);
+            if (!isNaN(numValue) && numValue > 0) {
+              this.plugin.settings.renameDebounceTimeout = numValue;
+              await this.plugin.saveSettings();
+            }
           }),
       );
 
