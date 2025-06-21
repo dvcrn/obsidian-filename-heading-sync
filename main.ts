@@ -46,7 +46,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   newHeadingStyle: HeadingStyle.Prefix,
   replaceStyle: false,
   underlineString: '===',
-  renameDebounceTimeout: 2000,
+  renameDebounceTimeout: 1000,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -187,7 +187,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       const reg = new RegExp(this.settings.ignoreRegex);
       return reg.exec(path) !== null;
-    } catch {}
+    } catch { }
 
     return false;
   }
@@ -797,11 +797,11 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Rename Debounce Timeout')
       .setDesc(
-        'Delay in milliseconds before renaming the file after typing stops. This prevents frequent renames while typing. Default is 2000ms (2 seconds).',
+        'Delay in milliseconds before renaming the file after typing stops. This prevents frequent renames while typing. Default is 1000ms (2 seconds).',
       )
       .addText((text) =>
         text
-          .setPlaceholder('2000')
+          .setPlaceholder('1000')
           .setValue(String(this.plugin.settings.renameDebounceTimeout))
           .onChange(async (value) => {
             const numValue = parseInt(value);
