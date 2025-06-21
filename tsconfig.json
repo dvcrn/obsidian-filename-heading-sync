@@ -17,7 +17,7 @@
       "ES6",
       "ES7"
     ],
-    "types": ["jest", "node"],
+    "types": ["jest", "node", "obsidian-typings"],
     "esModuleInterop": true
   },
   "include": ["**/*.ts"]
