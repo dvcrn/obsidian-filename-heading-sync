@@ -35,6 +35,7 @@ interface FilenameHeadingSyncPluginSettings {
   replaceStyle: boolean;
   underlineString: string;
   renameDebounceTimeout: number;
+  insertHeadingIfMissing: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -47,6 +48,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   replaceStyle: false,
   underlineString: '===',
   renameDebounceTimeout: 1000,
+  insertHeadingIfMissing: true,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -263,8 +265,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       ) {
         const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
         this.isRenameInProgress = true;
-        await this.app.fileManager.renameFile(file, newPath);
-        this.isRenameInProgress = false;
+        try {
+          await this.app.fileManager.renameFile(file, newPath);
+        } catch (error) {
+          // Rename failed, but we still need to reset the flag
+        } finally {
+          this.isRenameInProgress = false;
+        }
       }
     });
   }
@@ -333,7 +340,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
             sanitizedHeading,
           );
         }
-      } else this.insertHeading(file, lines, start, sanitizedHeading);
+      } else if (this.settings.insertHeadingIfMissing) {
+        this.insertHeading(file, lines, start, sanitizedHeading);
+      }
     });
   }
 
@@ -740,6 +749,20 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.useFileSaveHook)
           .onChange(async (value) => {
             this.plugin.settings.useFileSaveHook = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Insert Heading If Missing')
+      .setDesc(
+        'Whether to automatically insert a heading when none is found. Disable this to prevent the plugin from adding headings to files without them.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.insertHeadingIfMissing)
+          .onChange(async (value) => {
+            this.plugin.settings.insertHeadingIfMissing = value;
             await this.plugin.saveSettings();
           }),
       );
