@@ -36,6 +36,7 @@ interface FilenameHeadingSyncPluginSettings {
   underlineString: string;
   renameDebounceTimeout: number;
   insertHeadingIfMissing: boolean;
+  ignoreFilenamePrefix: number;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -49,6 +50,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   underlineString: '===',
   renameDebounceTimeout: 1000,
   insertHeadingIfMissing: true,
+  ignoreFilenamePrefix: 0,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -259,18 +261,21 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       if (heading === null) return; // no heading found, nothing to do here
 
       const sanitizedHeading = this.sanitizeHeading(heading.text);
-      if (
-        sanitizedHeading.length > 0 &&
-        this.sanitizeHeading(file.basename) !== sanitizedHeading
-      ) {
-        const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
-        this.isRenameInProgress = true;
-        try {
-          await this.app.fileManager.renameFile(file, newPath);
-        } catch (error) {
-          // Rename failed, but we still need to reset the flag
-        } finally {
-          this.isRenameInProgress = false;
+      if (sanitizedHeading.length > 0) {
+        const newFilename = this.createFilenameWithPrefix(sanitizedHeading, file.basename);
+        const currentTitleFromFilename = this.extractTitleFromFilename(file.basename);
+        const sanitizedCurrentTitle = this.sanitizeHeading(currentTitleFromFilename);
+        
+        if (sanitizedHeading !== sanitizedCurrentTitle) {
+          const newPath = `${file.parent?.path}/${newFilename}.md`;
+          this.isRenameInProgress = true;
+          try {
+            await this.app.fileManager.renameFile(file, newPath);
+          } catch (error) {
+            // Rename failed, but we still need to reset the flag
+          } finally {
+            this.isRenameInProgress = false;
+          }
         }
       }
     });
@@ -324,7 +329,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     await this.ensureFileSaved(file);
 
-    const sanitizedHeading = this.sanitizeHeading(file.basename);
+    const titleFromFilename = this.extractTitleFromFilename(file.basename);
+    const sanitizedHeading = this.sanitizeHeading(titleFromFilename);
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
@@ -445,6 +451,44 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     );
     text = text.replace(userIllegalSymbolsRegExp, '');
     return text.trim();
+  }
+
+  /**
+   * Extracts the title part from a filename by removing the date prefix
+   * 
+   * @param {string} filename The full filename
+   * @returns {string} The title part without the date prefix
+   */
+  extractTitleFromFilename(filename: string): string {
+    if (this.settings.ignoreFilenamePrefix <= 0) {
+      return filename;
+    }
+    
+    // Remove the specified number of characters from the beginning
+    const titlePart = filename.substring(this.settings.ignoreFilenamePrefix);
+    
+    // If the title part starts with a space, remove it
+    return titlePart.startsWith(' ') ? titlePart.substring(1) : titlePart;
+  }
+
+  /**
+   * Preserves the date prefix when creating a new filename from a heading
+   * 
+   * @param {string} heading The heading text
+   * @param {string} originalFilename The original filename to extract prefix from
+   * @returns {string} The new filename with preserved prefix
+   */
+  createFilenameWithPrefix(heading: string, originalFilename: string): string {
+    if (this.settings.ignoreFilenamePrefix <= 0) {
+      return heading;
+    }
+    
+    // Extract the prefix (date part)
+    const prefix = originalFilename.substring(0, this.settings.ignoreFilenamePrefix);
+    
+    // Combine prefix with the sanitized heading, ensuring proper spacing
+    const prefixEndsWithSpace = prefix.endsWith(' ');
+    return prefixEndsWithSpace ? `${prefix}${heading}` : `${prefix} ${heading}`;
   }
 
   /**
@@ -830,6 +874,24 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             const numValue = parseInt(value);
             if (!isNaN(numValue) && numValue > 0) {
               this.plugin.settings.renameDebounceTimeout = numValue;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Ignore Filename Prefix Characters')
+      .setDesc(
+        'Number of characters to ignore from the beginning of filenames. Useful for date-prefixed files (e.g., "202409261558 " would be 13). Set to 0 to disable.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('0')
+          .setValue(String(this.plugin.settings.ignoreFilenamePrefix))
+          .onChange(async (value) => {
+            const numValue = parseInt(value);
+            if (!isNaN(numValue) && numValue >= 0) {
+              this.plugin.settings.ignoreFilenamePrefix = numValue;
               await this.plugin.saveSettings();
             }
           }),
