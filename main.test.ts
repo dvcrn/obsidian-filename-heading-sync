@@ -266,4 +266,56 @@ describe('FilenameHeadingSyncPlugin', () => {
       });
     });
   });
+
+  describe('edge cases', () => {
+    it('should handle invalid regex gracefully in include mode', async () => {
+      await plugin.loadSettings();
+      plugin.settings.useIncludeMode = true;
+      plugin.settings.includeRegex = '[invalid regex';
+      
+      const mockFile = { path: 'test.md' } as any;
+      const result = plugin.fileIsIgnored(mockFile, 'test.md');
+      expect(result).toBe(true); // Should ignore all files when regex is invalid
+    });
+
+    it('should handle invalid regex gracefully in ignore mode', async () => {
+      await plugin.loadSettings();
+      plugin.settings.useIncludeMode = false;
+      plugin.settings.ignoreRegex = '[invalid regex';
+      
+      const mockFile = { path: 'test.md' } as any;
+      const result = plugin.fileIsIgnored(mockFile, 'test.md');
+      expect(result).toBe(false); // Should not ignore files when regex is invalid
+    });
+
+    it('should prioritize manual inclusion over regex rules', async () => {
+      await plugin.loadSettings();
+      plugin.settings.useIncludeMode = true;
+      plugin.settings.includeRegex = 'other/.*'; // Doesn't match our file
+      plugin.settings.includedFiles = { 'test.md': null };
+      
+      const mockFile = { path: 'test.md' } as any;
+      const result = plugin.fileIsIgnored(mockFile, 'test.md');
+      expect(result).toBe(false); // Should include due to manual inclusion
+    });
+
+    it('should work with complex regex patterns', async () => {
+      await plugin.loadSettings();
+      plugin.settings.useIncludeMode = true;
+      plugin.settings.includeRegex = '^(notes|important)/.*\\.(md|txt)$';
+      
+      const testCases = [
+        { path: 'notes/test.md', shouldInclude: true },
+        { path: 'important/doc.txt', shouldInclude: true },
+        { path: 'notes/test.pdf', shouldInclude: false },
+        { path: 'other/test.md', shouldInclude: false },
+      ];
+
+      testCases.forEach(({ path, shouldInclude }) => {
+        const mockFile = { path } as any;
+        const result = plugin.fileIsIgnored(mockFile, path);
+        expect(result).toBe(!shouldInclude);
+      });
+    });
+  });
 });
