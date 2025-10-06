@@ -5,8 +5,8 @@
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "rollup --config rollup.config.js --bundleConfigAsCjs -w",
-    "build": "rollup --config rollup.config.js --bundleConfigAsCjs",
+    "dev": "rollup --config rollup.config.ts --bundleConfigAsCjs -w",
+    "build": "rollup --config rollup.config.ts --bundleConfigAsCjs",
     "format": "npx prettier --config .prettierrc --write *.ts",
     "test": "jest"
   },

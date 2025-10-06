@@ -1,17 +1,26 @@
-# Use bash for recipe shell to support `set -euo pipefail` if needed
+# Use bash shell so we can rely on bashisms when needed
 
 set shell := ["bash", "-cu"]
 
-# Default recipe
+OBSIDIAN_PLUGIN_DIR := "/Users/david/Obsidian/Primary/.obsidian/plugins/obsidian-filename-heading-sync"
+
 default: build
 
-# Build: ensure build/ exists, run project build, and copy artifacts
+# Build production artifacts into build/
 build:
-    mkdir -p build/
     npm run build
-    cp main.js build/
-    cp manifest.json build/
 
-# Dev: run development watcher
-dev:
+# Build and copy artifacts into the live Obsidian plugin directory
+sync:
+    just build
+    mkdir -p {{ OBSIDIAN_PLUGIN_DIR }}
+    rsync -a --delete build/ {{ OBSIDIAN_PLUGIN_DIR }}/
+
+# Run the watch build (Rollup sets ROLLUP_WATCH automatically)
+watch:
+    npm run dev
+
+# Ensure initial sync, then run the watch build to keep Obsidian updated
+watch-sync:
+    just sync
     npm run dev
