@@ -232,36 +232,48 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }, this.settings.renameDebounceTimeout);
   }
 
+  async ensureFileSaved(file: TFile) {
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      if (
+        leaf.view instanceof MarkdownView &&
+        leaf.view.file === file &&
+        leaf.view.dirty
+      ) {
+        await leaf.view.save();
+      }
+    }
+  }
+
   async forceSyncHeadingToFilename(file: TFile | null) {
     if (file === null) {
       return;
     }
 
-    const data = await this.loadFileContent(file);
-    const lines = data.split('\n');
-    const start = this.findNoteStart(lines);
-    const heading = this.findHeading(lines, start);
+    await this.ensureFileSaved(file);
 
-    if (heading === null) return; // no heading found, nothing to do here
+    this.app.vault.read(file).then(async (data) => {
+      const lines = data.split('\n');
+      const start = this.findNoteStart(lines);
+      const heading = this.findHeading(lines, start);
 
-    const sanitizedHeading = this.sanitizeHeading(heading.text);
-    if (
-      sanitizedHeading.length > 0 &&
-      this.sanitizeHeading(file.basename) !== sanitizedHeading
-    ) {
-      const parentPath = file.parent?.path ?? '';
-      const newPath = parentPath
-        ? `${parentPath}/${sanitizedHeading}.md`
-        : `${sanitizedHeading}.md`;
-      this.isRenameInProgress = true;
-      try {
-        await this.app.fileManager.renameFile(file, newPath);
-      } catch (error) {
-        // Rename failed, but we still need to reset the flag
-      } finally {
-        this.isRenameInProgress = false;
+      if (heading === null) return; // no heading found, nothing to do here
+
+      const sanitizedHeading = this.sanitizeHeading(heading.text);
+      if (
+        sanitizedHeading.length > 0 &&
+        this.sanitizeHeading(file.basename) !== sanitizedHeading
+      ) {
+        const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
+        this.isRenameInProgress = true;
+        try {
+          await this.app.fileManager.renameFile(file, newPath);
+        } catch (error) {
+          // Rename failed, but we still need to reset the flag
+        } finally {
+          this.isRenameInProgress = false;
+        }
       }
-    }
+    });
   }
 
   /**
@@ -305,54 +317,33 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     this.forceSyncFilenameToHeading(file);
   }
 
-  private getOpenMarkdownView(file: TFile): MarkdownView | null {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (activeView && activeView.file === file) {
-      return activeView;
-    }
-
-    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
-      if (leaf.view instanceof MarkdownView && leaf.view.file === file) {
-        return leaf.view;
-      }
-    }
-
-    return null;
-  }
-
-  private async loadFileContent(file: TFile): Promise<string> {
-    const view = this.getOpenMarkdownView(file);
-    if (view?.editor) {
-      return view.editor.getValue();
-    }
-
-    return this.app.vault.read(file);
-  }
-
   async forceSyncFilenameToHeading(file: TFile | null) {
     if (file === null) {
       return;
     }
 
-    const sanitizedHeading = this.sanitizeHeading(file.basename);
-    const data = await this.loadFileContent(file);
-    const lines = data.split('\n');
-    const start = this.findNoteStart(lines);
-    const heading = this.findHeading(lines, start);
+    await this.ensureFileSaved(file);
 
-    if (heading !== null) {
-      if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
-        this.replaceHeading(
-          file,
-          lines,
-          heading.lineNumber,
-          heading.style,
-          sanitizedHeading,
-        );
+    const sanitizedHeading = this.sanitizeHeading(file.basename);
+    this.app.vault.read(file).then((data) => {
+      const lines = data.split('\n');
+      const start = this.findNoteStart(lines);
+      const heading = this.findHeading(lines, start);
+
+      if (heading !== null) {
+        if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
+          this.replaceHeading(
+            file,
+            lines,
+            heading.lineNumber,
+            heading.style,
+            sanitizedHeading,
+          );
+        }
+      } else if (this.settings.insertHeadingIfMissing) {
+        this.insertHeading(file, lines, start, sanitizedHeading);
       }
-    } else if (this.settings.insertHeadingIfMissing) {
-      this.insertHeading(file, lines, start, sanitizedHeading);
-    }
+    });
   }
 
   /**
