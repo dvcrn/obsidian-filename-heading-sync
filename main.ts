@@ -29,6 +29,9 @@ interface FilenameHeadingSyncPluginSettings {
   userIllegalSymbols: string[];
   ignoreRegex: string;
   ignoredFiles: { [key: string]: null };
+  useIncludeMode: boolean;
+  includeRegex: string;
+  includedFiles: { [key: string]: null };
   useFileOpenHook: boolean;
   useFileSaveHook: boolean;
   newHeadingStyle: HeadingStyle;
@@ -42,6 +45,9 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   userIllegalSymbols: [],
   ignoredFiles: {},
   ignoreRegex: '',
+  useIncludeMode: false,
+  includeRegex: '',
+  includedFiles: {},
   useFileOpenHook: true,
   useFileSaveHook: true,
   newHeadingStyle: HeadingStyle.Prefix,
@@ -156,6 +162,25 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'page-heading-sync-include-file',
+      name: 'Include current file',
+      checkCallback: (checking: boolean) => {
+        let leaf = this.app.workspace.activeLeaf;
+        if (leaf) {
+          if (!checking) {
+            const activeFile = this.app.workspace.getActiveFile();
+            if (activeFile) {
+              this.settings.includedFiles[activeFile.path] = null;
+            }
+            this.saveSettings();
+          }
+          return true;
+        }
+        return false;
+      },
+    });
+
+    this.addCommand({
       id: 'sync-filename-to-heading',
       name: 'Sync Filename to Heading',
       editorCallback: (editor: Editor, view: MarkdownView) =>
@@ -171,27 +196,53 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   fileIsIgnored(activeFile: TFile, path: string): boolean {
-    // check exclusions
+    // check exclusions (always excluded regardless of mode)
     if (isExcluded(this.app, activeFile)) {
       return true;
     }
 
-    // check manual ignore
-    if (this.settings.ignoredFiles[path] !== undefined) {
-      return true;
-    }
-
-    // check regex
-    try {
-      if (this.settings.ignoreRegex === '') {
+    if (this.settings.useIncludeMode) {
+      // In include mode: file is ignored if it's NOT in the include criteria
+      
+      // check manual include - if included, don't ignore
+      if (this.settings.includedFiles[path] !== undefined) {
         return false;
       }
 
-      const reg = new RegExp(this.settings.ignoreRegex);
-      return reg.exec(path) !== null;
-    } catch {}
+      // check include regex
+      try {
+        if (this.settings.includeRegex === '') {
+          // No include regex means no files are included (all ignored)
+          return true;
+        }
 
-    return false;
+        const reg = new RegExp(this.settings.includeRegex);
+        // If matches include regex, don't ignore; otherwise ignore
+        return reg.exec(path) === null;
+      } catch {
+        // Invalid regex means no files are included (all ignored)
+        return true;
+      }
+    } else {
+      // In ignore mode: file is ignored if it IS in the ignore criteria (current behavior)
+      
+      // check manual ignore
+      if (this.settings.ignoredFiles[path] !== undefined) {
+        return true;
+      }
+
+      // check ignore regex
+      try {
+        if (this.settings.ignoreRegex === '') {
+          return false;
+        }
+
+        const reg = new RegExp(this.settings.ignoreRegex);
+        return reg.exec(path) !== null;
+      } catch {}
+
+      return false;
+    }
   }
 
   /**
@@ -654,25 +705,38 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
 
   display(): void {
     let { containerEl } = this;
-    let regexIgnoredFilesDiv: HTMLDivElement;
+    let regexFilesDiv: HTMLDivElement;
 
-    const renderRegexIgnoredFiles = (div: HTMLElement) => {
+    const renderRegexFiles = (div: HTMLElement) => {
       // empty existing div
       div.innerHTML = '';
 
-      if (this.plugin.settings.ignoreRegex === '') {
+      const isIncludeMode = this.plugin.settings.useIncludeMode;
+      const regex = isIncludeMode ? this.plugin.settings.includeRegex : this.plugin.settings.ignoreRegex;
+
+      if (regex === '') {
         return;
       }
 
       try {
         const files = this.app.vault.getFiles();
-        const reg = new RegExp(this.plugin.settings.ignoreRegex);
+        const reg = new RegExp(regex);
 
-        files
-          .filter((file) => reg.exec(file.path) !== null)
-          .forEach((el) => {
-            new Setting(div).setDesc(el.path);
-          });
+        if (isIncludeMode) {
+          // In include mode, show files that match the include regex
+          files
+            .filter((file) => reg.exec(file.path) !== null)
+            .forEach((el) => {
+              new Setting(div).setDesc(el.path);
+            });
+        } else {
+          // In ignore mode, show files that match the ignore regex
+          files
+            .filter((file) => reg.exec(file.path) !== null)
+            .forEach((el) => {
+              new Setting(div).setDesc(el.path);
+            });
+        }
       } catch (e) {
         return;
       }
@@ -686,6 +750,25 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     });
     containerEl.createEl('p', {
       text: 'If no header is found, will insert a new one at the first line (after frontmatter).',
+    });
+
+    new Setting(containerEl)
+      .setName('File Selection Mode')
+      .setDesc(
+        'Choose how to select files for sync: Include mode (specify which files TO sync) or Ignore mode (specify which files to NOT sync).',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.useIncludeMode)
+          .onChange(async (value) => {
+            this.plugin.settings.useIncludeMode = value;
+            await this.plugin.saveSettings();
+            this.display(); // Refresh the entire settings UI
+          }),
+      );
+
+    containerEl.createEl('h3', { 
+      text: this.plugin.settings.useIncludeMode ? 'Include Mode Settings' : 'Ignore Mode Settings' 
     });
 
     new Setting(containerEl)
@@ -703,27 +786,51 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
-      .setName('Ignore Regex Rule')
-      .setDesc(
-        'Ignore rule in RegEx format. All files listed below will get ignored by this plugin.',
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder('MyFolder/.*')
-          .setValue(this.plugin.settings.ignoreRegex)
-          .onChange(async (value) => {
-            try {
-              new RegExp(value);
-              this.plugin.settings.ignoreRegex = value;
-            } catch {
-              this.plugin.settings.ignoreRegex = '';
-            }
+    if (this.plugin.settings.useIncludeMode) {
+      new Setting(containerEl)
+        .setName('Include Regex Rule')
+        .setDesc(
+          'Include rule in RegEx format. Only files matching this pattern will be synced by this plugin.',
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder('MyFolder/.*')
+            .setValue(this.plugin.settings.includeRegex)
+            .onChange(async (value) => {
+              try {
+                new RegExp(value);
+                this.plugin.settings.includeRegex = value;
+              } catch {
+                this.plugin.settings.includeRegex = '';
+              }
 
-            await this.plugin.saveSettings();
-            renderRegexIgnoredFiles(regexIgnoredFilesDiv);
-          }),
-      );
+              await this.plugin.saveSettings();
+              renderRegexFiles(regexFilesDiv);
+            }),
+        );
+    } else {
+      new Setting(containerEl)
+        .setName('Ignore Regex Rule')
+        .setDesc(
+          'Ignore rule in RegEx format. All files listed below will get ignored by this plugin.',
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder('MyFolder/.*')
+            .setValue(this.plugin.settings.ignoreRegex)
+            .onChange(async (value) => {
+              try {
+                new RegExp(value);
+                this.plugin.settings.ignoreRegex = value;
+              } catch {
+                this.plugin.settings.ignoreRegex = '';
+              }
+
+              await this.plugin.saveSettings();
+              renderRegexFiles(regexFilesDiv);
+            }),
+        );
+    }
 
     new Setting(containerEl)
       .setName('Use File Open Hook')
@@ -835,30 +942,58 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
-    containerEl.createEl('p', {
-      text: 'All files matching the above RegEx will get listed here',
-    });
-
-    regexIgnoredFilesDiv = containerEl.createDiv('test');
-    renderRegexIgnoredFiles(regexIgnoredFilesDiv);
-
-    containerEl.createEl('h2', { text: 'Manually Ignored Files' });
-    containerEl.createEl('p', {
-      text: 'You can ignore files from this plugin by using the "ignore this file" command',
-    });
-
-    // go over all ignored files and add them
-    for (let key in this.plugin.settings.ignoredFiles) {
-      const ignoredFilesSettingsObj = new Setting(containerEl).setDesc(key);
-
-      ignoredFilesSettingsObj.addButton((button) => {
-        button.setButtonText('Delete').onClick(async () => {
-          delete this.plugin.settings.ignoredFiles[key];
-          await this.plugin.saveSettings();
-          this.display();
-        });
+    // File lists section
+    if (this.plugin.settings.useIncludeMode) {
+      containerEl.createEl('h2', { text: 'Included Files By Regex' });
+      containerEl.createEl('p', {
+        text: 'All files matching the above RegEx will get synced by this plugin',
       });
+    } else {
+      containerEl.createEl('h2', { text: 'Ignored Files By Regex' });
+      containerEl.createEl('p', {
+        text: 'All files matching the above RegEx will get ignored by this plugin',
+      });
+    }
+
+    regexFilesDiv = containerEl.createDiv('test');
+    renderRegexFiles(regexFilesDiv);
+
+    if (this.plugin.settings.useIncludeMode) {
+      containerEl.createEl('h2', { text: 'Manually Included Files' });
+      containerEl.createEl('p', {
+        text: 'You can include files for this plugin by using the "include this file" command',
+      });
+
+      // go over all included files and add them
+      for (let key in this.plugin.settings.includedFiles) {
+        const includedFilesSettingsObj = new Setting(containerEl).setDesc(key);
+
+        includedFilesSettingsObj.addButton((button) => {
+          button.setButtonText('Delete').onClick(async () => {
+            delete this.plugin.settings.includedFiles[key];
+            await this.plugin.saveSettings();
+            this.display();
+          });
+        });
+      }
+    } else {
+      containerEl.createEl('h2', { text: 'Manually Ignored Files' });
+      containerEl.createEl('p', {
+        text: 'You can ignore files from this plugin by using the "ignore this file" command',
+      });
+
+      // go over all ignored files and add them
+      for (let key in this.plugin.settings.ignoredFiles) {
+        const ignoredFilesSettingsObj = new Setting(containerEl).setDesc(key);
+
+        ignoredFilesSettingsObj.addButton((button) => {
+          button.setButtonText('Delete').onClick(async () => {
+            delete this.plugin.settings.ignoredFiles[key];
+            await this.plugin.saveSettings();
+            this.display();
+          });
+        });
+      }
     }
   }
 }
