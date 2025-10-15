@@ -2,7 +2,7 @@
 
 set shell := ["bash", "-cu"]
 
-OBSIDIAN_PLUGIN_DIR := "/Users/david/Obsidian/Primary/.obsidian/plugins/obsidian-filename-heading-sync"
+OBSIDIAN_PLUGIN_DIR := env_var_or_default("OBSIDIAN_PLUGIN_PATH", "/Users/david/Obsidian/Primary/.obsidian/plugins/obsidian-filename-heading-sync")
 
 default: build
 

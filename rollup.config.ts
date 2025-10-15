@@ -6,9 +6,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 
 const BUILD_DIR = path.resolve('build');
-const OBSIDIAN_PLUGIN_PATH = path.resolve(
-  '/Users/david/Obsidian/Primary/.obsidian/plugins/obsidian-filename-heading-sync',
-);
+const OBSIDIAN_PLUGIN_PATH = process.env.OBSIDIAN_PLUGIN_PATH
+  ? path.resolve(process.env.OBSIDIAN_PLUGIN_PATH)
+  : null;
 const IS_WATCH = Boolean(process.env.ROLLUP_WATCH);
 
 async function ensureDir(dir) {
@@ -27,6 +27,13 @@ async function copyManifestIntoBuild() {
 }
 
 async function syncToObsidian() {
+  if (!OBSIDIAN_PLUGIN_PATH) {
+    console.warn(
+      'Skipping sync to Obsidian: OBSIDIAN_PLUGIN_PATH environment variable not set',
+    );
+    return;
+  }
+
   const mainSource = path.join(BUILD_DIR, 'main.js');
   const manifestSource = path.join(BUILD_DIR, 'manifest.json');
 
