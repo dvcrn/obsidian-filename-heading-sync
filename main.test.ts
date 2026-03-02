@@ -1,4 +1,8 @@
 import FilenameHeadingSyncPlugin from './main';
+import {
+  generateFilenameFromHeading,
+  generateHeadingFromFilename,
+} from './headings';
 import { App, PluginManifest } from 'obsidian';
 
 describe('FilenameHeadingSyncPlugin', () => {
@@ -133,5 +137,112 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(result?.style).toBe('Prefix');
       expect(result?.lineNumber).toBe(4);
     });
+  });
+});
+
+describe('generateFilenameFromHeading', () => {
+  const defaultSettings = {
+    userIllegalSymbols: [] as string[],
+    spaceReplacementCharacter: '',
+  };
+
+  it('should strip stock illegal characters', () => {
+    expect(generateFilenameFromHeading('My: File/Name', defaultSettings)).toBe(
+      'My FileName',
+    );
+  });
+
+  it('should strip user-defined illegal symbols', () => {
+    const settings = { ...defaultSettings, userIllegalSymbols: ['@', '!'] };
+    expect(generateFilenameFromHeading('Hello@World!', settings)).toBe(
+      'HelloWorld',
+    );
+  });
+
+  it('should replace spaces with configured character', () => {
+    const settings = { ...defaultSettings, spaceReplacementCharacter: '-' };
+    expect(generateFilenameFromHeading('My Cool Note', settings)).toBe(
+      'My-Cool-Note',
+    );
+  });
+
+  it('should replace spaces with underscore', () => {
+    const settings = { ...defaultSettings, spaceReplacementCharacter: '_' };
+    expect(generateFilenameFromHeading('My Cool Note', settings)).toBe(
+      'My_Cool_Note',
+    );
+  });
+
+  it('should strip illegal chars then replace spaces', () => {
+    const settings = { ...defaultSettings, spaceReplacementCharacter: '-' };
+    expect(generateFilenameFromHeading('My: Cool Note', settings)).toBe(
+      'My-Cool-Note',
+    );
+  });
+
+  it('should replace spaces with multi-character string', () => {
+    const settings = { ...defaultSettings, spaceReplacementCharacter: '---' };
+    expect(generateFilenameFromHeading('My Cool Note', settings)).toBe(
+      'My---Cool---Note',
+    );
+  });
+
+  it('should preserve current behavior when space replace is empty', () => {
+    expect(generateFilenameFromHeading('My Cool Note', defaultSettings)).toBe(
+      'My Cool Note',
+    );
+  });
+
+  it('should trim whitespace', () => {
+    expect(
+      generateFilenameFromHeading('  Hello World  ', defaultSettings),
+    ).toBe('Hello World');
+  });
+});
+
+describe('generateHeadingFromFilename', () => {
+  const defaultSettings = {
+    spaceReplacementCharacter: '',
+  };
+
+  it('should return filename as-is when no replace configured', () => {
+    expect(generateHeadingFromFilename('My-Cool-Note', defaultSettings)).toBe(
+      'My-Cool-Note',
+    );
+  });
+
+  it('should replace hyphens with spaces', () => {
+    const settings = { spaceReplacementCharacter: '-' };
+    expect(generateHeadingFromFilename('My-Cool-Note', settings)).toBe(
+      'My Cool Note',
+    );
+  });
+
+  it('should replace underscores with spaces', () => {
+    const settings = { spaceReplacementCharacter: '_' };
+    expect(generateHeadingFromFilename('My_Cool_Note', settings)).toBe(
+      'My Cool Note',
+    );
+  });
+
+  it('should replace multi-character string with spaces', () => {
+    const settings = { spaceReplacementCharacter: '---' };
+    expect(generateHeadingFromFilename('My---Cool---Note', settings)).toBe(
+      'My Cool Note',
+    );
+  });
+
+  it('should handle regex special characters in replace string', () => {
+    const settings = { spaceReplacementCharacter: '.' };
+    expect(generateHeadingFromFilename('My.Cool.Note', settings)).toBe(
+      'My Cool Note',
+    );
+  });
+
+  it('should trim whitespace', () => {
+    const settings = { spaceReplacementCharacter: '-' };
+    expect(generateHeadingFromFilename('-Hello-World-', settings)).toBe(
+      'Hello World',
+    );
   });
 });

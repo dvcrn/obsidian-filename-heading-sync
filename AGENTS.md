@@ -1,2 +1,5 @@
+- suggest extending this file (AGENTS.md) with new rules as we learn more about the repository
 - repo is dvcrn/filename-obsidian-heading-sync
 - always run `npm run format` after each change to reformat the code
+- always run tests with `npm test`
+- keep code in functions that are testable without Obsidian

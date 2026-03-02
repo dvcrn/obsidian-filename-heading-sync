@@ -10,8 +10,10 @@ import {
   PluginManifest,
 } from 'obsidian';
 import { isExcluded } from './exclusions';
-
-const stockIllegalSymbols = /[\\/:|#^[\]]/g;
+import {
+  generateFilenameFromHeading,
+  generateHeadingFromFilename,
+} from './headings';
 
 // Must be Strings unless settings dialog is updated.
 const enum HeadingStyle {
@@ -36,6 +38,7 @@ interface FilenameHeadingSyncPluginSettings {
   underlineString: string;
   renameDebounceTimeout: number;
   insertHeadingIfMissing: boolean;
+  spaceReplacementCharacter: string;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -49,6 +52,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   underlineString: '===',
   renameDebounceTimeout: 1000,
   insertHeadingIfMissing: true,
+  spaceReplacementCharacter: '',
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -324,24 +328,27 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     await this.ensureFileSaved(file);
 
-    const sanitizedHeading = this.sanitizeHeading(file.basename);
+    const newHeading = generateHeadingFromFilename(
+      file.basename,
+      this.settings,
+    );
     this.app.vault.read(file).then((data) => {
       const lines = data.split('\n');
       const start = this.findNoteStart(lines);
       const heading = this.findHeading(lines, start);
 
       if (heading !== null) {
-        if (this.sanitizeHeading(heading.text) !== sanitizedHeading) {
+        if (heading.text !== newHeading) {
           this.replaceHeading(
             file,
             lines,
             heading.lineNumber,
             heading.style,
-            sanitizedHeading,
+            newHeading,
           );
         }
       } else if (this.settings.insertHeadingIfMissing) {
-        this.insertHeading(file, lines, start, sanitizedHeading);
+        this.insertHeading(file, lines, start, newHeading);
       }
     });
   }
@@ -428,23 +435,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     return null; // no valid heading found outside code blocks
   }
 
-  regExpEscape(str: string): string {
-    return String(str).replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
-  }
-
   sanitizeHeading(text: string) {
-    // stockIllegalSymbols is a regExp object, but userIllegalSymbols is a list of strings and therefore they are handled separately.
-    text = text.replace(stockIllegalSymbols, '');
-
-    const userIllegalSymbolsEscaped = this.settings.userIllegalSymbols.map(
-      (str) => this.regExpEscape(str),
-    );
-    const userIllegalSymbolsRegExp = new RegExp(
-      userIllegalSymbolsEscaped.join('|'),
-      'g',
-    );
-    text = text.replace(userIllegalSymbolsRegExp, '');
-    return text.trim();
+    return generateFilenameFromHeading(text, this.settings);
   }
 
   /**
@@ -699,6 +691,21 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.userIllegalSymbols.join())
           .onChange(async (value) => {
             this.plugin.settings.userIllegalSymbols = value.split(',');
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Space Replacement Character')
+      .setDesc(
+        'Replace spaces with this character when syncing in both directions. For example, with "-" the heading "My Cool Note" becomes the filename "My-Cool-Note" and vice versa. Leave empty to keep spaces as-is.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('- or _')
+          .setValue(this.plugin.settings.spaceReplacementCharacter)
+          .onChange(async (value) => {
+            this.plugin.settings.spaceReplacementCharacter = value;
             await this.plugin.saveSettings();
           }),
       );
