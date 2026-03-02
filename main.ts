@@ -691,7 +691,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Custom Illegal Characters/Strings')
       .setDesc(
-        'Type characters/strings separated by a comma. This input is space sensitive.',
+        'Characters or strings to strip from the heading when generating the filename. Separated by commas. This input is space sensitive.',
       )
       .addText((text) =>
         text
