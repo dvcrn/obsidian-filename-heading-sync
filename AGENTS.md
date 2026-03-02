@@ -1,1 +1,2 @@
 - repo is dvcrn/filename-obsidian-heading-sync
+- always run `npm run format` after each change to reformat the code
