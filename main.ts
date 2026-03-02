@@ -696,13 +696,13 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Space Replacement Character')
+      .setName('Space Replacement')
       .setDesc(
-        'Replace spaces with this character when syncing in both directions. For example, with "-" the heading "My Cool Note" becomes the filename "My-Cool-Note" and vice versa. Leave empty to keep spaces as-is.',
+        'Replace spaces with this character or string when syncing in both directions. For example, with "-" the heading "My Cool Note" becomes "My-Cool-Note", or with "---" it becomes "My---Cool---Note". Leave empty to keep spaces as-is.',
       )
       .addText((text) =>
         text
-          .setPlaceholder('- or _')
+          .setPlaceholder('-, _,  ---')
           .setValue(this.plugin.settings.spaceReplacementCharacter)
           .onChange(async (value) => {
             this.plugin.settings.spaceReplacementCharacter = value;
