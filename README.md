@@ -34,6 +34,34 @@ Disable the file-open hook in settings and they should play together nicely ([#4
 - When renaming a file that isn't the current file, nothing will happen. The heading will get updated the next time the file is opened in edit mode
 - [Special characters](https://github.com/dvcrn/obsidian-filename-header-sync/blob/bc3a1a7805f2b63ad5767c3d01dcef7b65b1aebd/main.ts) that obsidian can't handle will get auto-stripped
 
+## Development
+
+### Building the Plugin
+
+To build the plugin for production:
+
+```bash
+npm run build
+```
+
+### Watch Mode with Auto-Sync to Obsidian
+
+If you want to develop with automatic syncing to your Obsidian vault, you can set the `OBSIDIAN_PLUGIN_PATH` environment variable to point to your plugin directory:
+
+```bash
+export OBSIDIAN_PLUGIN_PATH="/path/to/your/vault/.obsidian/plugins/obsidian-filename-heading-sync"
+npm run dev
+```
+
+The watch build will automatically copy the compiled plugin files to your Obsidian vault whenever changes are detected.
+
+Alternatively, if you're using [just](https://github.com/casey/just), you can use:
+
+```bash
+export OBSIDIAN_PLUGIN_PATH="/path/to/your/vault/.obsidian/plugins/obsidian-filename-heading-sync"
+just watch-sync
+```
+
 ## LICENSE
 
 MIT
