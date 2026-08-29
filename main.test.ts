@@ -3,7 +3,7 @@ import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
 } from './headings';
-import { App, PluginManifest } from 'obsidian';
+import { App, MarkdownView, PluginManifest, TFile } from 'obsidian';
 
 describe('FilenameHeadingSyncPlugin', () => {
   let plugin: FilenameHeadingSyncPlugin;
@@ -136,6 +136,71 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(result?.text).toBe('Actual Heading');
       expect(result?.style).toBe('Prefix');
       expect(result?.lineNumber).toBe(4);
+    });
+  });
+
+  describe('heading to filename sync', () => {
+    it('renames an existing unsanitized filename', async () => {
+      const file = {
+        basename: 'Test "File" *',
+        parent: { path: '' },
+      } as TFile;
+      const renameFile = jest.fn().mockResolvedValue(undefined);
+      const read = jest.fn().mockResolvedValue('# Test "File" *');
+
+      app.fileManager.renameFile = renameFile;
+      app.vault.read = read;
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+      plugin.settings = {
+        userIllegalSymbols: ['"', '*'],
+        spaceReplacementCharacter: '',
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncHeadingToFilename(file);
+
+      expect(renameFile).toHaveBeenCalledWith(file, 'Test File.md');
+    });
+
+    it('reads a dirty heading from the editor without forcing a save', async () => {
+      const file = {
+        basename: 'Old name',
+        parent: { path: '' },
+      } as TFile;
+      const renameFile = jest.fn().mockResolvedValue(undefined);
+      const read = jest.fn();
+      const save = jest.fn();
+      const view = Object.assign(Object.create(MarkdownView.prototype), {
+        file,
+        dirty: true,
+        save,
+        editor: { getValue: jest.fn().mockReturnValue('# Live heading') },
+      });
+
+      app.fileManager.renameFile = renameFile;
+      app.vault.read = read;
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([{ view }]);
+      plugin.settings = {
+        userIllegalSymbols: [],
+        spaceReplacementCharacter: '',
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncHeadingToFilename(file);
+
+      expect(save).not.toHaveBeenCalled();
+      expect(read).not.toHaveBeenCalled();
+      expect(renameFile).toHaveBeenCalledWith(file, 'Live heading.md');
+    });
+
+    it('ignores its own rename event before asynchronous handlers run', () => {
+      const waitForTemplater = jest.spyOn(plugin, 'waitForTemplater');
+      plugin.settings = {
+        useFileSaveHook: true,
+      } as unknown as typeof plugin.settings;
+      plugin.isRenameInProgress = true;
+
+      plugin.handleFileRename({} as TFile, 'Old name.md');
+
+      expect(waitForTemplater).not.toHaveBeenCalled();
     });
   });
 });

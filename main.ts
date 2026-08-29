@@ -110,11 +110,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
     this.registerEvent(
       this.app.vault.on('rename', (file, oldPath) => {
-        if (this.settings.useFileSaveHook) {
-          this.waitForTemplater().then(() => {
-            return this.handleSyncFilenameToHeading(file, oldPath);
-          });
-        }
+        this.handleFileRename(file, oldPath);
       }),
     );
 
@@ -171,6 +167,17 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       name: 'Sync Heading to Filename',
       editorCallback: (editor: Editor, view: MarkdownView) =>
         this.forceSyncHeadingToFilename(view.file),
+    });
+  }
+
+  handleFileRename(file: TAbstractFile, oldPath: string) {
+    // Check before the asynchronous Templater wait while a plugin rename is still marked.
+    if (this.isRenameInProgress || !this.settings.useFileSaveHook) {
+      return;
+    }
+
+    this.waitForTemplater().then(() => {
+      return this.handleSyncFilenameToHeading(file, oldPath);
     });
   }
 
@@ -248,36 +255,52 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     }
   }
 
+  getOpenMarkdownView(file: TFile): MarkdownView | null {
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      if (leaf.view instanceof MarkdownView && leaf.view.file === file) {
+        return leaf.view;
+      }
+    }
+
+    return null;
+  }
+
+  async loadCurrentFileContent(file: TFile): Promise<string> {
+    const view = this.getOpenMarkdownView(file);
+    if (view?.editor) {
+      return view.editor.getValue();
+    }
+
+    return this.app.vault.read(file);
+  }
+
   async forceSyncHeadingToFilename(file: TFile | null) {
     if (file === null) {
       return;
     }
 
-    await this.ensureFileSaved(file);
+    const data = await this.loadCurrentFileContent(file);
+    const lines = data.split('\n');
+    const start = this.findNoteStart(lines);
+    const heading = this.findHeading(lines, start);
 
-    this.app.vault.read(file).then(async (data) => {
-      const lines = data.split('\n');
-      const start = this.findNoteStart(lines);
-      const heading = this.findHeading(lines, start);
+    if (heading === null) return;
 
-      if (heading === null) return; // no heading found, nothing to do here
-
-      const sanitizedHeading = this.sanitizeHeading(heading.text);
-      if (
-        sanitizedHeading.length > 0 &&
-        this.sanitizeHeading(file.basename) !== sanitizedHeading
-      ) {
-        const newPath = `${file.parent?.path}/${sanitizedHeading}.md`;
-        this.isRenameInProgress = true;
-        try {
-          await this.app.fileManager.renameFile(file, newPath);
-        } catch (error) {
-          // Rename failed, but we still need to reset the flag
-        } finally {
-          this.isRenameInProgress = false;
-        }
+    const sanitizedHeading = this.sanitizeHeading(heading.text);
+    if (sanitizedHeading.length > 0 && file.basename !== sanitizedHeading) {
+      const parentPath = file.parent?.path ?? '';
+      const newPath = parentPath
+        ? `${parentPath}/${sanitizedHeading}.md`
+        : `${sanitizedHeading}.md`;
+      this.isRenameInProgress = true;
+      try {
+        await this.app.fileManager.renameFile(file, newPath);
+      } catch (error) {
+        // Rename failed, but we still need to reset the flag
+      } finally {
+        this.isRenameInProgress = false;
       }
-    });
+    }
   }
 
   /**
