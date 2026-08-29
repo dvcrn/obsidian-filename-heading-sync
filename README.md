@@ -36,31 +36,24 @@ Disable the file-open hook in settings and they should play together nicely ([#4
 
 ## Development
 
-### Building the Plugin
+### Building the plugin
 
 To build the plugin for production:
 
 ```bash
-npm run build
+mise run build
 ```
 
-### Watch Mode with Auto-Sync to Obsidian
+### Watch mode with auto-sync to Obsidian
 
 If you want to develop with automatic syncing to your Obsidian vault, you can set the `OBSIDIAN_PLUGIN_PATH` environment variable to point to your plugin directory:
 
 ```bash
 export OBSIDIAN_PLUGIN_PATH="/path/to/your/vault/.obsidian/plugins/obsidian-filename-heading-sync"
-npm run dev
+mise run watch-sync
 ```
 
 The watch build will automatically copy the compiled plugin files to your Obsidian vault whenever changes are detected.
-
-Alternatively, if you're using [just](https://github.com/casey/just), you can use:
-
-```bash
-export OBSIDIAN_PLUGIN_PATH="/path/to/your/vault/.obsidian/plugins/obsidian-filename-heading-sync"
-just watch-sync
-```
 
 ## LICENSE
 
