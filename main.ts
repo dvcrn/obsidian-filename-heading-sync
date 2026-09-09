@@ -56,7 +56,8 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
-  isRenameInProgress: boolean = false;
+  private renamingFiles = new Set<TAbstractFile>();
+  private headingSyncs = new Map<TFile, Promise<void>>();
   settings: FilenameHeadingSyncPluginSettings;
   renameDebounceTimer: NodeJS.Timeout | null = null;
 
@@ -171,8 +172,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   handleFileRename(file: TAbstractFile, oldPath: string) {
-    // Check before the asynchronous Templater wait while a plugin rename is still marked.
-    if (this.isRenameInProgress || !this.settings.useFileSaveHook) {
+    // Suppress our own event before the async wait can outlive the rename.
+    if (this.renamingFiles.has(file) || !this.settings.useFileSaveHook) {
       return;
     }
 
@@ -279,6 +280,24 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       return;
     }
 
+    // Manual commands and debounce callbacks share a queue for this file only.
+    const previous = this.headingSyncs.get(file) ?? Promise.resolve();
+    const sync = previous
+      // A failed request must not prevent later requests from running.
+      .catch(() => {})
+      .then(() => this.syncHeadingToFilename(file))
+      .finally(() => {
+        // An older request must not remove a newer request's queue entry.
+        if (this.headingSyncs.get(file) === sync) {
+          this.headingSyncs.delete(file);
+        }
+      });
+    this.headingSyncs.set(file, sync);
+    return sync;
+  }
+
+  private async syncHeadingToFilename(file: TFile) {
+    // Read when queued work starts so edits made while waiting are included.
     const data = await this.loadCurrentFileContent(file);
     const lines = data.split('\n');
     const start = this.findNoteStart(lines);
@@ -292,13 +311,14 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       const newPath = parentPath
         ? `${parentPath}/${sanitizedHeading}.md`
         : `${sanitizedHeading}.md`;
-      this.isRenameInProgress = true;
+      // Keep suppression scoped to this file while Obsidian emits rename events.
+      this.renamingFiles.add(file);
       try {
         await this.app.fileManager.renameFile(file, newPath);
       } catch (error) {
-        // Rename failed, but we still need to reset the flag
+        // A filename conflict leaves the note unchanged; allow future attempts.
       } finally {
-        this.isRenameInProgress = false;
+        this.renamingFiles.delete(file);
       }
     }
   }
@@ -311,7 +331,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param      {string}         oldPath  The old path
    */
   handleSyncFilenameToHeading(file: TAbstractFile, oldPath: string) {
-    if (this.isRenameInProgress) {
+    if (this.renamingFiles.has(file)) {
       return;
     }
 
