@@ -1,0 +1,32 @@
+[tasks.format]
+run = "npm run format"
+description = "Format TypeScript sources"
+
+[tasks.test]
+run = "npm test"
+description = "Run the Jest test suite"
+
+[tasks.build]
+run = "npm run build"
+description = "Build the Obsidian plugin"
+
+[tasks.sync]
+depends = ["build"]
+description = "Build and copy artifacts into an Obsidian plugin directory"
+run = """
+if [ -z "${OBSIDIAN_PLUGIN_PATH:-}" ]; then
+  echo "OBSIDIAN_PLUGIN_PATH must point to an Obsidian plugin directory" >&2
+  exit 1
+fi
+mkdir -p "$OBSIDIAN_PLUGIN_PATH"
+rsync -a --delete build/ "$OBSIDIAN_PLUGIN_PATH/"
+"""
+
+[tasks.watch]
+run = "npm run dev"
+description = "Build continuously when source files change"
+
+[tasks.watch-sync]
+depends = ["sync"]
+run = "npm run dev"
+description = "Build continuously and copy artifacts into Obsidian"

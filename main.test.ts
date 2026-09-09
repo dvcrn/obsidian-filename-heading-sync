@@ -3,7 +3,7 @@ import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
 } from './headings';
-import { App, PluginManifest } from 'obsidian';
+import { App, MarkdownView, PluginManifest, TFile } from 'obsidian';
 
 describe('FilenameHeadingSyncPlugin', () => {
   let plugin: FilenameHeadingSyncPlugin;
@@ -136,6 +136,223 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(result?.text).toBe('Actual Heading');
       expect(result?.style).toBe('Prefix');
       expect(result?.lineNumber).toBe(4);
+    });
+  });
+
+  describe('heading to filename sync', () => {
+    it('renames an existing unsanitized filename', async () => {
+      const file = {
+        basename: 'Test "File" *',
+        parent: { path: '' },
+      } as TFile;
+      const renameFile = jest.fn().mockResolvedValue(undefined);
+      const read = jest.fn().mockResolvedValue('# Test "File" *');
+
+      app.fileManager.renameFile = renameFile;
+      app.vault.read = read;
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+      plugin.settings = {
+        userIllegalSymbols: ['"', '*'],
+        spaceReplacementCharacter: '',
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncHeadingToFilename(file);
+
+      expect(renameFile).toHaveBeenCalledWith(file, 'Test File.md');
+    });
+
+    it('reads a dirty heading from the editor without forcing a save', async () => {
+      const file = {
+        basename: 'Old name',
+        parent: { path: '' },
+      } as TFile;
+      const renameFile = jest.fn().mockResolvedValue(undefined);
+      const read = jest.fn();
+      const save = jest.fn();
+      const view = Object.assign(Object.create(MarkdownView.prototype), {
+        file,
+        dirty: true,
+        save,
+        editor: { getValue: jest.fn().mockReturnValue('# Live heading') },
+      });
+
+      app.fileManager.renameFile = renameFile;
+      app.vault.read = read;
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([{ view }]);
+      plugin.settings = {
+        userIllegalSymbols: [],
+        spaceReplacementCharacter: '',
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncHeadingToFilename(file);
+
+      expect(save).not.toHaveBeenCalled();
+      expect(read).not.toHaveBeenCalled();
+      expect(renameFile).toHaveBeenCalledWith(file, 'Live heading.md');
+    });
+
+    it('ignores its own rename event before asynchronous handlers run', async () => {
+      const file = Object.assign(new TFile(), {
+        basename: 'Old name',
+        path: 'Old name.md',
+        extension: 'md',
+      });
+      const waitForTemplater = jest.spyOn(plugin, 'waitForTemplater');
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+      app.vault.read = jest.fn().mockResolvedValue('# New name');
+      app.fileManager.renameFile = jest.fn(async () => {
+        plugin.handleFileRename(file, 'Old name.md');
+      });
+      plugin.settings = {
+        useFileSaveHook: true,
+        userIllegalSymbols: [],
+        spaceReplacementCharacter: '',
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncHeadingToFilename(file);
+
+      expect(app.fileManager.renameFile).toHaveBeenCalled();
+      expect(waitForTemplater).not.toHaveBeenCalled();
+    });
+
+    describe('concurrent synchronization', () => {
+      let file: TFile;
+      let heading: string;
+      let releaseRename: () => void;
+      let renameStarted: Promise<void>;
+      let reverseSync: jest.SpyInstance;
+
+      beforeEach(() => {
+        file = Object.assign(new TFile(), {
+          basename: 'Old',
+          path: 'Old.md',
+          extension: 'md',
+        });
+        heading = '# First';
+        plugin.settings = {
+          userIllegalSymbols: [],
+          spaceReplacementCharacter: '',
+          useFileSaveHook: true,
+        } as unknown as typeof plugin.settings;
+        const view = Object.assign(Object.create(MarkdownView.prototype), {
+          file,
+          editor: { getValue: () => heading },
+        });
+        app.workspace.getLeavesOfType = jest.fn().mockReturnValue([{ view }]);
+        jest.spyOn(plugin, 'waitForTemplater').mockResolvedValue(undefined);
+        reverseSync = jest
+          .spyOn(plugin, 'forceSyncFilenameToHeading')
+          .mockResolvedValue(undefined);
+        jest.spyOn(plugin, 'fileIsIgnored').mockReturnValue(false);
+        let markStarted: () => void;
+        renameStarted = new Promise<void>((resolve) => {
+          markStarted = resolve;
+        });
+        const gate = new Promise<void>((resolve) => {
+          releaseRename = resolve;
+        });
+        app.fileManager.renameFile = jest.fn(async (renamedFile, path) => {
+          markStarted();
+          await gate;
+          const oldPath = renamedFile.path;
+          renamedFile.path = path;
+          if (renamedFile instanceof TFile) {
+            renamedFile.basename = path.slice(0, -3);
+          }
+          plugin.handleFileRename(renamedFile, oldPath);
+        });
+      });
+
+      it('serializes overlapping requests and reads the latest heading when queued work starts', async () => {
+        const first = plugin.forceSyncHeadingToFilename(file);
+        await renameStarted;
+        heading = '# Intermediate';
+        const second = plugin.forceSyncHeadingToFilename(file);
+        const third = plugin.forceSyncHeadingToFilename(file);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(app.fileManager.renameFile).toHaveBeenCalledTimes(1);
+        heading = '# Latest';
+        releaseRename();
+        await Promise.all([first, second, third]);
+        expect(app.fileManager.renameFile).toHaveBeenCalledTimes(2);
+        expect(app.fileManager.renameFile).toHaveBeenLastCalledWith(
+          file,
+          'Latest.md',
+        );
+        expect(reverseSync).not.toHaveBeenCalled();
+        plugin.handleFileRename(file, 'Previous.md');
+        await Promise.resolve();
+        expect(reverseSync).toHaveBeenCalledWith(file);
+      });
+
+      it('does not suppress external renames of another file', async () => {
+        const sync = plugin.forceSyncHeadingToFilename(file);
+        await renameStarted;
+        const other = Object.assign(new TFile(), {
+          basename: 'Other',
+          path: 'Other.md',
+          extension: 'md',
+        });
+        plugin.handleFileRename(other, 'Previous.md');
+        await Promise.resolve();
+        expect(reverseSync).toHaveBeenCalledWith(other);
+        releaseRename();
+        await sync;
+        expect(reverseSync).toHaveBeenCalledTimes(1);
+      });
+
+      it('allows different files to synchronize independently', async () => {
+        const first = plugin.forceSyncHeadingToFilename(file);
+        await renameStarted;
+        const other = Object.assign(new TFile(), {
+          basename: 'Other',
+          path: 'Other.md',
+          extension: 'md',
+        });
+        app.vault.read = jest.fn().mockResolvedValue('# Other heading');
+        const second = plugin.forceSyncHeadingToFilename(other);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(app.fileManager.renameFile).toHaveBeenCalledTimes(2);
+        releaseRename();
+        await Promise.all([first, second]);
+        expect(reverseSync).not.toHaveBeenCalled();
+      });
+
+      it('clears suppression and permits another sync after a rename fails', async () => {
+        const renameFile = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Conflict'))
+          .mockImplementationOnce(async () => {
+            plugin.handleFileRename(file, 'Old.md');
+          });
+        app.fileManager.renameFile = renameFile;
+        await plugin.forceSyncHeadingToFilename(file);
+        plugin.handleFileRename(file, 'Previous.md');
+        await Promise.resolve();
+        expect(reverseSync).toHaveBeenCalledTimes(1);
+        heading = '# Available';
+        await plugin.forceSyncHeadingToFilename(file);
+        expect(renameFile).toHaveBeenLastCalledWith(file, 'Available.md');
+        expect(reverseSync).toHaveBeenCalledTimes(1);
+      });
+
+      it('continues queued work after a content read fails', async () => {
+        app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+        app.vault.read = jest
+          .fn()
+          .mockRejectedValueOnce(new Error('Read failed'))
+          .mockResolvedValueOnce('# Recovered');
+        releaseRename();
+        const first = plugin.forceSyncHeadingToFilename(file);
+        const second = plugin.forceSyncHeadingToFilename(file);
+        await expect(first).rejects.toThrow('Read failed');
+        await second;
+        expect(app.fileManager.renameFile).toHaveBeenCalledWith(
+          file,
+          'Recovered.md',
+        );
+        expect(reverseSync).not.toHaveBeenCalled();
+      });
     });
   });
 });
