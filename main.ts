@@ -13,6 +13,7 @@ import { isExcluded } from './exclusions';
 import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
+  headingMatchesFilename,
 } from './headings';
 
 // Must be Strings unless settings dialog is updated.
@@ -381,7 +382,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       const heading = this.findHeading(lines, start);
 
       if (heading !== null) {
-        if (heading.text !== newHeading) {
+        if (
+          !headingMatchesFilename(heading.text, file.basename, this.settings)
+        ) {
           this.replaceHeading(
             file,
             lines,

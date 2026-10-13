@@ -47,3 +47,21 @@ export function generateHeadingFromFilename(
 
   return text.trim();
 }
+
+/**
+ * Whether the heading already corresponds to the filename. Headings may keep
+ * characters that are stripped when generating filenames.
+ */
+export function headingMatchesFilename(
+  heading: string,
+  filename: string,
+  settings: Pick<
+    HeadingSettings,
+    'userIllegalSymbols' | 'spaceReplacementCharacter'
+  >,
+): boolean {
+  return (
+    generateFilenameFromHeading(heading, settings) ===
+    generateFilenameFromHeading(filename, settings)
+  );
+}

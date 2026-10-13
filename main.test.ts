@@ -2,6 +2,7 @@ import FilenameHeadingSyncPlugin from './main';
 import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
+  headingMatchesFilename,
 } from './headings';
 import { App, MarkdownView, PluginManifest, TFile } from 'obsidian';
 
@@ -136,6 +137,27 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(result?.text).toBe('Actual Heading');
       expect(result?.style).toBe('Prefix');
       expect(result?.lineNumber).toBe(4);
+    });
+  });
+
+  describe('filename to heading sync', () => {
+    it('keeps a heading whose stripped characters are absent from the filename', async () => {
+      const file = { basename: 'text text' } as TFile;
+      const modify = jest.fn();
+
+      app.vault.read = jest.fn().mockResolvedValue('# text: text\n\nbody');
+      app.vault.modify = modify;
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+      plugin.settings = {
+        userIllegalSymbols: [],
+        spaceReplacementCharacter: '',
+        insertHeadingIfMissing: true,
+      } as unknown as typeof plugin.settings;
+
+      await plugin.forceSyncFilenameToHeading(file);
+      await new Promise(process.nextTick);
+
+      expect(modify).not.toHaveBeenCalled();
     });
   });
 
@@ -461,5 +483,31 @@ describe('generateHeadingFromFilename', () => {
     expect(generateHeadingFromFilename('-Hello-World-', settings)).toBe(
       'Hello World',
     );
+  });
+});
+
+describe('headingMatchesFilename', () => {
+  const defaultSettings = {
+    userIllegalSymbols: [],
+    spaceReplacementCharacter: '',
+  };
+
+  it('matches a heading containing characters stripped from the filename', () => {
+    expect(
+      headingMatchesFilename('text: text', 'text text', defaultSettings),
+    ).toBe(true);
+  });
+
+  it('matches a heading whose spaces are replaced in the filename', () => {
+    const settings = { ...defaultSettings, spaceReplacementCharacter: '-' };
+    expect(
+      headingMatchesFilename('My Cool Note', 'My-Cool-Note', settings),
+    ).toBe(true);
+  });
+
+  it('does not match a heading for a different filename', () => {
+    expect(
+      headingMatchesFilename('text: text', 'other text', defaultSettings),
+    ).toBe(false);
   });
 });
