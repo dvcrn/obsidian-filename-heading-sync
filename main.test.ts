@@ -485,6 +485,40 @@ describe('generateFilenameFromHeading', () => {
       );
     });
 
+    it('does not keep half of a multi-character space replacement', () => {
+      const settings = {
+        ...defaultSettings,
+        spaceReplacementCharacter: '---',
+        maxFilenameBytes: 8,
+      };
+      expect(generateFilenameFromHeading('A BBBB', settings)).toBe('A…');
+    });
+
+    it('adds no marker when the ellipsis is an illegal symbol', () => {
+      const settings = {
+        ...defaultSettings,
+        userIllegalSymbols: ['…'],
+        maxFilenameBytes: 19,
+      };
+      const result = generateFilenameFromHeading('Hello brave world', settings);
+      expect(result).toBe('Hello brave');
+      expect(
+        headingMatchesFilename('Hello brave world', result, settings),
+      ).toBe(true);
+    });
+
+    it('matches a name shortened under an earlier, smaller limit', () => {
+      for (const maxFilenameBytes of [20, 0]) {
+        const settings = { ...defaultSettings, maxFilenameBytes };
+        expect(
+          headingMatchesFilename('Hello brave world', 'Hello brave…', settings),
+        ).toBe(true);
+        expect(
+          headingMatchesFilename('Hello other world', 'Hello brave…', settings),
+        ).toBe(false);
+      }
+    });
+
     it('still matches the full heading after shortening', () => {
       const settings = { ...defaultSettings, maxFilenameBytes: 19 };
       expect(
