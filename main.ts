@@ -339,7 +339,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     if (!key) return null;
 
     const value = this.app.metadataCache.getFileCache(file)?.frontmatter?.[key];
-    return typeof value === 'string' && value.trim() ? value.trim() : null;
+    // YAML may parse titles like `1984` as numbers.
+    if (value === null || value === undefined || typeof value === 'object') {
+      return null;
+    }
+    const title = String(value).trim();
+    return title || null;
   }
 
   /**
@@ -351,7 +356,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     if (!key) return;
 
     // Compare with the actual basename, so a failed rename keeps the title.
-    const value = titlePropertyValue(headingText, file.basename);
+    const value = titlePropertyValue(headingText, file.basename, this.settings);
     const current =
       this.app.metadataCache.getFileCache(file)?.frontmatter?.[key];
     if ((current ?? null) === value) return;

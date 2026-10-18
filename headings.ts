@@ -55,9 +55,12 @@ export function generateHeadingFromFilename(
 export function titlePropertyValue(
   heading: string,
   filename: string,
+  settings: Pick<HeadingSettings, 'spaceReplacementCharacter'>,
 ): string | null {
   const title = heading.trim();
-  return title === filename ? null : title;
+  return title === generateHeadingFromFilename(filename, settings)
+    ? null
+    : title;
 }
 
 /**

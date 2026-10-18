@@ -194,6 +194,15 @@ describe('FilenameHeadingSyncPlugin', () => {
         expect(modify.mock.calls[0][1]).toContain('# Coffee? Yes');
       });
 
+      it('uses a stored title that YAML parsed as a number', async () => {
+        const { file, modify } = setup({ title: 1984 });
+
+        await plugin.forceSyncFilenameToHeading(file);
+        await new Promise(process.nextTick);
+
+        expect(modify.mock.calls[0][1]).toContain('# 1984');
+      });
+
       it('uses the filename without a stored title', async () => {
         const { file, modify } = setup({});
 
@@ -632,11 +641,23 @@ describe('headingMatchesFilename', () => {
 });
 
 describe('titlePropertyValue', () => {
+  const settings = { spaceReplacementCharacter: '' };
+
   it('returns the heading when the filename differs', () => {
-    expect(titlePropertyValue('Coffee? Yes', 'Coffee Yes')).toBe('Coffee? Yes');
+    expect(titlePropertyValue('Coffee? Yes', 'Coffee Yes', settings)).toBe(
+      'Coffee? Yes',
+    );
   });
 
   it('returns null when the filename equals the heading', () => {
-    expect(titlePropertyValue(' Coffee ', 'Coffee')).toBeNull();
+    expect(titlePropertyValue(' Coffee ', 'Coffee', settings)).toBeNull();
+  });
+
+  it('returns null when only spaces were replaced in the filename', () => {
+    const dashed = { spaceReplacementCharacter: '-' };
+    expect(titlePropertyValue('Coffee Yes', 'Coffee-Yes', dashed)).toBeNull();
+    expect(titlePropertyValue('Coffee? Yes', 'Coffee-Yes', dashed)).toBe(
+      'Coffee? Yes',
+    );
   });
 });
