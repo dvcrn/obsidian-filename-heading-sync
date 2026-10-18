@@ -24,6 +24,9 @@ export function isOutsideVault(f: TFile) {
 }
 
 export function isExcluded(app: App, f: TFile) {
+  if (isOutsideVault(f)) {
+    return true;
+  }
   if (isExcalidraw(app, f)) {
     return true;
   }
