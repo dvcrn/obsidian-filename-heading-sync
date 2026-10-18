@@ -14,6 +14,7 @@ Discussion on the obsidian forum [here](https://forum.obsidian.md/t/plugin-for-k
 - When opening a file that doesn't have a heading yet -> will insert one
 - When opening a file with a different heading than the current file name -> will update the heading
 - When updating the heading of a file -> will rename the file
+- Optional "Title Property": when illegal characters had to be stripped from the filename, the full heading is stored in a frontmatter property (e.g. `title`), and removed again once filename and heading are equal
 
 If you're not a fan of automatic renaming you can also disable the "File Save Hook" and "File Open Hook" in settings and just use the manual sync commands (thanks @mnaoumov!)
 
