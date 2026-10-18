@@ -161,6 +161,43 @@ describe('FilenameHeadingSyncPlugin', () => {
     });
   });
 
+  describe('files outside the vault', () => {
+    const external = () =>
+      ({
+        basename: 'notes',
+        path: 'file:/tmp/notes.md',
+        parent: null,
+      }) as TFile;
+
+    beforeEach(() => {
+      app.vault.read = jest.fn().mockResolvedValue('body without heading');
+      app.vault.modify = jest.fn();
+      app.fileManager.renameFile = jest.fn();
+      app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+      plugin.settings = {
+        userIllegalSymbols: [],
+        spaceReplacementCharacter: '',
+        insertHeadingIfMissing: true,
+        newHeadingStyle: 'Prefix',
+      } as unknown as typeof plugin.settings;
+    });
+
+    it('does not insert a heading', async () => {
+      await plugin.forceSyncFilenameToHeading(external());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(app.vault.modify).not.toHaveBeenCalled();
+    });
+
+    it('does not rename the file', async () => {
+      app.vault.read = jest.fn().mockResolvedValue('# New name');
+
+      await plugin.forceSyncHeadingToFilename(external());
+
+      expect(app.fileManager.renameFile).not.toHaveBeenCalled();
+    });
+  });
+
   describe('heading to filename sync', () => {
     it('renames an existing unsanitized filename', async () => {
       const file = {
