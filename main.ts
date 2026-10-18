@@ -40,6 +40,7 @@ interface FilenameHeadingSyncPluginSettings {
   renameDebounceTimeout: number;
   insertHeadingIfMissing: boolean;
   spaceReplacementCharacter: string;
+  maxFilenameBytes: number;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -54,6 +55,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   renameDebounceTimeout: 1000,
   insertHeadingIfMissing: true,
   spaceReplacementCharacter: '',
+  maxFilenameBytes: 0,
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -883,6 +885,24 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
             const numValue = parseInt(value);
             if (!isNaN(numValue) && numValue > 0) {
               this.plugin.settings.renameDebounceTimeout = numValue;
+              await this.plugin.saveSettings();
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Max Filename Length (bytes)')
+      .setDesc(
+        'Shorten filenames longer than this many UTF-8 bytes, including ".md". The cut is made at a word boundary and marked with "…". Android and many sync tools allow 255 bytes; accented letters take 2 bytes or more. 0 = no limit.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('0')
+          .setValue(String(this.plugin.settings.maxFilenameBytes))
+          .onChange(async (value) => {
+            const numValue = parseInt(value);
+            if (!isNaN(numValue) && numValue >= 0) {
+              this.plugin.settings.maxFilenameBytes = numValue;
               await this.plugin.saveSettings();
             }
           }),

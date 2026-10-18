@@ -437,6 +437,61 @@ describe('generateFilenameFromHeading', () => {
       generateFilenameFromHeading('  Hello World  ', defaultSettings),
     ).toBe('Hello World');
   });
+
+  describe('max filename length', () => {
+    const bytes = (text: string) => new TextEncoder().encode(text).length;
+
+    it('keeps a name that fits exactly', () => {
+      // 17 bytes + ".md" = 20 bytes
+      const settings = { ...defaultSettings, maxFilenameBytes: 20 };
+      expect(generateFilenameFromHeading('Hello brave world', settings)).toBe(
+        'Hello brave world',
+      );
+    });
+
+    it('cuts at a word boundary and adds an ellipsis', () => {
+      const settings = { ...defaultSettings, maxFilenameBytes: 19 };
+      const result = generateFilenameFromHeading('Hello brave world', settings);
+      expect(result).toBe('Hello brave…');
+      expect(bytes(result) + 3).toBeLessThanOrEqual(19);
+    });
+
+    it('counts accented letters as multiple bytes', () => {
+      // 'Árvíztűrő tükörfúrógép' is 22 characters but 31 bytes
+      const settings = { ...defaultSettings, maxFilenameBytes: 30 };
+      const result = generateFilenameFromHeading(
+        'Árvíztűrő tükörfúrógép',
+        settings,
+      );
+      expect(result).toBe('Árvíztűrő…');
+      expect(bytes(result) + 3).toBeLessThanOrEqual(30);
+    });
+
+    it('cuts a single long word without splitting a character', () => {
+      const settings = { ...defaultSettings, maxFilenameBytes: 12 };
+      const result = generateFilenameFromHeading('éééééééééé', settings);
+      // 12 - 3 (".md") - 3 ("…") leaves 6 bytes = 3 × 'é'
+      expect(result).toBe('ééé…');
+    });
+
+    it('cuts at the space replacement character', () => {
+      const settings = {
+        ...defaultSettings,
+        spaceReplacementCharacter: '-',
+        maxFilenameBytes: 19,
+      };
+      expect(generateFilenameFromHeading('Hello brave world', settings)).toBe(
+        'Hello-brave…',
+      );
+    });
+
+    it('still matches the full heading after shortening', () => {
+      const settings = { ...defaultSettings, maxFilenameBytes: 19 };
+      expect(
+        headingMatchesFilename('Hello brave world', 'Hello brave…', settings),
+      ).toBe(true);
+    });
+  });
 });
 
 describe('generateHeadingFromFilename', () => {

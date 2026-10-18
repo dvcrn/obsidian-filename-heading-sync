@@ -7,13 +7,60 @@ function regExpEscape(str: string): string {
 export interface HeadingSettings {
   userIllegalSymbols: string[];
   spaceReplacementCharacter: string;
+  /** Maximum UTF-8 bytes of the filename including ".md". 0 = no limit. */
+  maxFilenameBytes?: number;
+}
+
+const ellipsis = '…';
+const extensionBytes = '.md'.length;
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+/**
+ * Shorten the filename so that it plus ".md" fits into maxBytes. The cut is
+ * made at a word boundary where possible, never inside a character, and is
+ * marked with "…".
+ */
+export function truncateFilename(
+  text: string,
+  maxBytes: number,
+  separator: string,
+): string {
+  if (!maxBytes || byteLength(text) + extensionBytes <= maxBytes) {
+    return text;
+  }
+
+  const budget = maxBytes - extensionBytes - byteLength(ellipsis);
+  let cut = '';
+  let used = 0;
+  // Iterating a string yields whole code points, so no character is split.
+  for (const char of text) {
+    used += byteLength(char);
+    if (used > budget) {
+      break;
+    }
+    cut += char;
+  }
+
+  // Prefer to end at a word boundary, unless that would drop the whole name.
+  const boundary = cut.lastIndexOf(separator);
+  if (boundary > 0) {
+    cut = cut.slice(0, boundary);
+  }
+  while (separator && cut.endsWith(separator)) {
+    cut = cut.slice(0, -separator.length);
+  }
+
+  return cut.trimEnd() + ellipsis;
 }
 
 export function generateFilenameFromHeading(
   heading: string,
   settings: Pick<
     HeadingSettings,
-    'userIllegalSymbols' | 'spaceReplacementCharacter'
+    'userIllegalSymbols' | 'spaceReplacementCharacter' | 'maxFilenameBytes'
   >,
 ): string {
   // Strip stock illegal symbols
@@ -31,7 +78,11 @@ export function generateFilenameFromHeading(
     text = text.replace(/ /g, settings.spaceReplacementCharacter);
   }
 
-  return text.trim();
+  return truncateFilename(
+    text.trim(),
+    settings.maxFilenameBytes ?? 0,
+    settings.spaceReplacementCharacter || ' ',
+  );
 }
 
 export function generateHeadingFromFilename(
@@ -57,7 +108,7 @@ export function headingMatchesFilename(
   filename: string,
   settings: Pick<
     HeadingSettings,
-    'userIllegalSymbols' | 'spaceReplacementCharacter'
+    'userIllegalSymbols' | 'spaceReplacementCharacter' | 'maxFilenameBytes'
   >,
 ): boolean {
   return (
