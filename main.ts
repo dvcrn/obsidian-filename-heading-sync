@@ -893,7 +893,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Max Filename Length (bytes)')
       .setDesc(
-        'Shorten filenames longer than this many UTF-8 bytes, including ".md". The cut is made at a word boundary and marked with "…". Android and many sync tools allow 255 bytes; accented letters take 2 bytes or more. 0 = no limit.',
+        'Shorten filenames longer than this many UTF-8 bytes, including ".md". The cut is made at a word boundary and marked with "…". Android and many sync tools allow 255 bytes; accented letters take 2 bytes or more. 0 = no limit, otherwise at least 10.',
       )
       .addText((text) =>
         text
@@ -901,7 +901,8 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(String(this.plugin.settings.maxFilenameBytes))
           .onChange(async (value) => {
             const numValue = parseInt(value);
-            if (!isNaN(numValue) && numValue >= 0) {
+            // Below 10 bytes, ".md" and "…" leave almost no room for a name.
+            if (numValue === 0 || numValue >= 10) {
               this.plugin.settings.maxFilenameBytes = numValue;
               await this.plugin.saveSettings();
             }
