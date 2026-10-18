@@ -332,6 +332,17 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   /**
+   * The non-empty value of the configured title property, if any.
+   */
+  storedTitle(file: TFile): string | null {
+    const key = this.settings.titleProperty?.trim();
+    if (!key) return null;
+
+    const value = this.app.metadataCache.getFileCache(file)?.frontmatter?.[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  /**
    * Stores the heading in the configured title property when the filename
    * differs from it, and removes the property when they are equal.
    */
@@ -424,7 +435,13 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
           );
         }
       } else if (this.settings.insertHeadingIfMissing) {
-        this.insertHeading(file, lines, start, newHeading);
+        // A stored title holds characters the filename could not.
+        this.insertHeading(
+          file,
+          lines,
+          start,
+          this.storedTitle(file) ?? newHeading,
+        );
       }
     });
   }

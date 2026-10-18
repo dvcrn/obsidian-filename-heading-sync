@@ -160,6 +160,49 @@ describe('FilenameHeadingSyncPlugin', () => {
 
       expect(modify).not.toHaveBeenCalled();
     });
+
+    describe('inserting a missing heading', () => {
+      function setup(frontmatter: Record<string, unknown>) {
+        const file = { basename: 'Coffee Yes' } as TFile;
+        const modify = jest.fn();
+
+        app.vault.read = jest
+          .fn()
+          .mockResolvedValue('---\ntitle: x\n---\nbody');
+        app.vault.modify = modify;
+        app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+        app.metadataCache = {
+          getFileCache: jest.fn().mockReturnValue({ frontmatter }),
+        } as unknown as App['metadataCache'];
+        plugin.settings = {
+          userIllegalSymbols: [],
+          spaceReplacementCharacter: '',
+          insertHeadingIfMissing: true,
+          newHeadingStyle: 'Prefix',
+          titleProperty: 'title',
+        } as unknown as typeof plugin.settings;
+
+        return { file, modify };
+      }
+
+      it('uses the stored title property', async () => {
+        const { file, modify } = setup({ title: 'Coffee? Yes' });
+
+        await plugin.forceSyncFilenameToHeading(file);
+        await new Promise(process.nextTick);
+
+        expect(modify.mock.calls[0][1]).toContain('# Coffee? Yes');
+      });
+
+      it('uses the filename without a stored title', async () => {
+        const { file, modify } = setup({});
+
+        await plugin.forceSyncFilenameToHeading(file);
+        await new Promise(process.nextTick);
+
+        expect(modify.mock.calls[0][1]).toContain('# Coffee Yes');
+      });
+    });
   });
 
   describe('heading to filename sync', () => {
