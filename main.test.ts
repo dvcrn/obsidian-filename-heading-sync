@@ -3,6 +3,7 @@ import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
   headingMatchesFilename,
+  titlePropertyValue,
 } from './headings';
 import { App, MarkdownView, PluginManifest, TFile } from 'obsidian';
 
@@ -211,6 +212,81 @@ describe('FilenameHeadingSyncPlugin', () => {
       expect(save).not.toHaveBeenCalled();
       expect(read).not.toHaveBeenCalled();
       expect(renameFile).toHaveBeenCalledWith(file, 'Live heading.md');
+    });
+
+    describe('title property', () => {
+      function setup(heading: string, frontmatter: Record<string, unknown>) {
+        const file = {
+          basename: 'Old name',
+          parent: { path: '' },
+        } as TFile;
+        const stored = { ...frontmatter };
+        const processFrontMatter = jest.fn(async (_file, fn) => fn(stored));
+
+        app.fileManager.renameFile = jest.fn(async (_file, newPath) => {
+          file.basename = newPath.replace(/\.md$/, '');
+        });
+        app.fileManager.processFrontMatter = processFrontMatter;
+        app.vault.read = jest.fn().mockResolvedValue(`# ${heading}`);
+        app.workspace.getLeavesOfType = jest.fn().mockReturnValue([]);
+        app.metadataCache = {
+          getFileCache: jest.fn().mockReturnValue({ frontmatter }),
+        } as unknown as App['metadataCache'];
+        plugin.settings = {
+          userIllegalSymbols: ['?'],
+          spaceReplacementCharacter: '',
+          titleProperty: 'title',
+        } as unknown as typeof plugin.settings;
+
+        return { file, stored, processFrontMatter };
+      }
+
+      it('stores the heading when the filename had to be sanitized', async () => {
+        const { file, stored } = setup('Coffee? Yes', {});
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(file.basename).toBe('Coffee Yes');
+        expect(stored).toEqual({ title: 'Coffee? Yes' });
+      });
+
+      it('removes the property when filename and heading are equal', async () => {
+        const { file, stored } = setup('Coffee', {
+          title: 'Coffee?',
+          tags: ['x'],
+        });
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(stored).toEqual({ tags: ['x'] });
+      });
+
+      it('does not write when the property is already correct', async () => {
+        const { file, processFrontMatter } = setup('Coffee? Yes', {
+          title: 'Coffee? Yes',
+        });
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(processFrontMatter).not.toHaveBeenCalled();
+      });
+
+      it('does not add frontmatter when no title is needed', async () => {
+        const { file, processFrontMatter } = setup('Coffee', {});
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(processFrontMatter).not.toHaveBeenCalled();
+      });
+
+      it('does nothing when the setting is empty', async () => {
+        const { file, processFrontMatter } = setup('Coffee? Yes', {});
+        plugin.settings.titleProperty = '';
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(processFrontMatter).not.toHaveBeenCalled();
+      });
     });
 
     it('ignores its own rename event before asynchronous handlers run', async () => {
@@ -509,5 +585,15 @@ describe('headingMatchesFilename', () => {
     expect(
       headingMatchesFilename('text: text', 'other text', defaultSettings),
     ).toBe(false);
+  });
+});
+
+describe('titlePropertyValue', () => {
+  it('returns the heading when the filename differs', () => {
+    expect(titlePropertyValue('Coffee? Yes', 'Coffee Yes')).toBe('Coffee? Yes');
+  });
+
+  it('returns null when the filename equals the heading', () => {
+    expect(titlePropertyValue(' Coffee ', 'Coffee')).toBeNull();
   });
 });

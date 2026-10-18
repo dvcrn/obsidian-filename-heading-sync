@@ -49,6 +49,18 @@ export function generateHeadingFromFilename(
 }
 
 /**
+ * The value to store in the title property: the heading when the filename
+ * cannot represent it exactly, otherwise null (the property is not needed).
+ */
+export function titlePropertyValue(
+  heading: string,
+  filename: string,
+): string | null {
+  const title = heading.trim();
+  return title === filename ? null : title;
+}
+
+/**
  * Whether the heading already corresponds to the filename. Headings may keep
  * characters that are stripped when generating filenames.
  */

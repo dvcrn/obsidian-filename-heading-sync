@@ -14,6 +14,7 @@ import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
   headingMatchesFilename,
+  titlePropertyValue,
 } from './headings';
 
 // Must be Strings unless settings dialog is updated.
@@ -40,6 +41,7 @@ interface FilenameHeadingSyncPluginSettings {
   renameDebounceTimeout: number;
   insertHeadingIfMissing: boolean;
   spaceReplacementCharacter: string;
+  titleProperty: string;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -54,6 +56,7 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   renameDebounceTimeout: 1000,
   insertHeadingIfMissing: true,
   spaceReplacementCharacter: '',
+  titleProperty: '',
 };
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
@@ -322,6 +325,33 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         this.renamingFiles.delete(file);
       }
     }
+
+    if (sanitizedHeading.length > 0) {
+      await this.syncTitleProperty(file, heading.text);
+    }
+  }
+
+  /**
+   * Stores the heading in the configured title property when the filename
+   * differs from it, and removes the property when they are equal.
+   */
+  async syncTitleProperty(file: TFile, headingText: string) {
+    const key = this.settings.titleProperty?.trim();
+    if (!key) return;
+
+    // Compare with the actual basename, so a failed rename keeps the title.
+    const value = titlePropertyValue(headingText, file.basename);
+    const current =
+      this.app.metadataCache.getFileCache(file)?.frontmatter?.[key];
+    if ((current ?? null) === value) return;
+
+    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+      if (value === null) {
+        delete frontmatter[key];
+      } else {
+        frontmatter[key] = value;
+      }
+    });
   }
 
   /**
@@ -802,6 +832,21 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.useFileSaveHook)
           .onChange(async (value) => {
             this.plugin.settings.useFileSaveHook = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Title Property')
+      .setDesc(
+        'Frontmatter property that stores the heading when the filename cannot match it exactly (e.g. because illegal characters were stripped). The property is removed when filename and heading are equal. Leave empty to disable.',
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('title')
+          .setValue(this.plugin.settings.titleProperty)
+          .onChange(async (value) => {
+            this.plugin.settings.titleProperty = value.trim();
             await this.plugin.saveSettings();
           }),
       );
