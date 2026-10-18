@@ -326,7 +326,8 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       }
     }
 
-    if (sanitizedHeading.length > 0) {
+    // A heading made only of illegal characters still needs the property.
+    if (heading.text.trim().length > 0) {
       await this.syncTitleProperty(file, heading.text);
     }
   }
@@ -355,11 +356,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     const key = this.settings.titleProperty?.trim();
     if (!key) return;
 
+    // The file on disk is behind a dirty editor; its save triggers a new sync.
+    if (this.getOpenMarkdownView(file)?.dirty) return;
+
     // Compare with the actual basename, so a failed rename keeps the title.
     const value = titlePropertyValue(headingText, file.basename, this.settings);
-    const current =
-      this.app.metadataCache.getFileCache(file)?.frontmatter?.[key];
-    if ((current ?? null) === value) return;
+    if (this.storedTitle(file) === value) return;
 
     await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
       if (value === null) {
@@ -422,33 +424,28 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       file.basename,
       this.settings,
     );
-    this.app.vault.read(file).then((data) => {
-      const lines = data.split('\n');
-      const start = this.findNoteStart(lines);
-      const heading = this.findHeading(lines, start);
+    const data = await this.app.vault.read(file);
+    const lines = data.split('\n');
+    const start = this.findNoteStart(lines);
+    const heading = this.findHeading(lines, start);
 
-      if (heading !== null) {
-        if (
-          !headingMatchesFilename(heading.text, file.basename, this.settings)
-        ) {
-          this.replaceHeading(
-            file,
-            lines,
-            heading.lineNumber,
-            heading.style,
-            newHeading,
-          );
-        }
-      } else if (this.settings.insertHeadingIfMissing) {
-        // A stored title holds characters the filename could not.
-        this.insertHeading(
+    if (heading !== null) {
+      if (!headingMatchesFilename(heading.text, file.basename, this.settings)) {
+        await this.replaceHeading(
           file,
           lines,
-          start,
-          this.storedTitle(file) ?? newHeading,
+          heading.lineNumber,
+          heading.style,
+          newHeading,
         );
+        await this.syncTitleProperty(file, newHeading);
       }
-    });
+    } else if (this.settings.insertHeadingIfMissing) {
+      // A stored title holds characters the filename could not.
+      const insertedHeading = this.storedTitle(file) ?? newHeading;
+      await this.insertHeading(file, lines, start, insertedHeading);
+      await this.syncTitleProperty(file, insertedHeading);
+    }
   }
 
   /**
@@ -545,7 +542,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {number} lineNumber zero-based index of the line to replace
    * @param {string} text the new text
    */
-  insertHeading(
+  async insertHeading(
     file: TFile,
     fileLines: string[],
     lineNumber: number,
@@ -554,9 +551,9 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
     const newStyle = this.settings.newHeadingStyle;
     switch (newStyle) {
       case HeadingStyle.Underline: {
-        this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
+        await this.insertLineInFile(file, fileLines, lineNumber, `${heading}`);
 
-        this.insertLineInFile(
+        await this.insertLineInFile(
           file,
           fileLines,
           lineNumber + 1,
@@ -565,7 +562,12 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         break;
       }
       case HeadingStyle.Prefix: {
-        this.insertLineInFile(file, fileLines, lineNumber, `# ${heading}`);
+        await this.insertLineInFile(
+          file,
+          fileLines,
+          lineNumber,
+          `# ${heading}`,
+        );
         break;
       }
     }
@@ -581,7 +583,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
    * @param {HeadingStyle} oldStyle the style of the original heading
    * @param {string} text the new text
    */
-  replaceHeading(
+  async replaceHeading(
     file: TFile,
     fileLines: string[],
     lineNumber: number,
@@ -595,11 +597,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       switch (newStyle) {
         // For underline style, replace heading line...
         case HeadingStyle.Underline: {
-          this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
+          await this.replaceLineInFile(
+            file,
+            fileLines,
+            lineNumber,
+            `${newHeading}`,
+          );
           //..., then add or replace underline.
           switch (oldStyle) {
             case HeadingStyle.Prefix: {
-              this.insertLineInFile(
+              await this.insertLineInFile(
                 file,
                 fileLines,
                 lineNumber + 1,
@@ -609,7 +616,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
             }
             case HeadingStyle.Underline: {
               // Update underline with setting.
-              this.replaceLineInFile(
+              await this.replaceLineInFile(
                 file,
                 fileLines,
                 lineNumber + 1,
@@ -622,7 +629,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
         }
         // For prefix style, replace heading line, and possibly delete underline
         case HeadingStyle.Prefix: {
-          this.replaceLineInFile(
+          await this.replaceLineInFile(
             file,
             fileLines,
             lineNumber,
@@ -634,7 +641,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
               break;
             }
             case HeadingStyle.Underline: {
-              this.replaceLineInFile(file, fileLines, lineNumber + 1, '');
+              await this.replaceLineInFile(file, fileLines, lineNumber + 1, '');
               break;
             }
           }
@@ -645,11 +652,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       // If not replacing style, match
       switch (oldStyle) {
         case HeadingStyle.Underline: {
-          this.replaceLineInFile(file, fileLines, lineNumber, `${newHeading}`);
+          await this.replaceLineInFile(
+            file,
+            fileLines,
+            lineNumber,
+            `${newHeading}`,
+          );
           break;
         }
         case HeadingStyle.Prefix: {
-          this.replaceLineInFile(
+          await this.replaceLineInFile(
             file,
             fileLines,
             lineNumber,
@@ -687,7 +699,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       fileLines[lineNumber] = text;
     }
     const data = fileLines.join('\n');
-    this.app.vault.modify(file, data);
+    return this.app.vault.modify(file, data);
   }
 
   /**
@@ -712,7 +724,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
       fileLines.splice(lineNumber, 0, text);
     }
     const data = fileLines.join('\n');
-    this.app.vault.modify(file, data);
+    return this.app.vault.modify(file, data);
   }
 
   async loadSettings() {

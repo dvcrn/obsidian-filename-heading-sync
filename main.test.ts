@@ -339,6 +339,43 @@ describe('FilenameHeadingSyncPlugin', () => {
 
         expect(processFrontMatter).not.toHaveBeenCalled();
       });
+
+      it('stores a heading made only of illegal characters', async () => {
+        const { file, stored } = setup('?', {});
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(file.basename).toBe('Old name');
+        expect(stored).toEqual({ title: '?' });
+      });
+
+      it('does not write while the editor has unsaved changes', async () => {
+        const { file, processFrontMatter } = setup('Coffee? Yes', {});
+        const view = Object.assign(Object.create(MarkdownView.prototype), {
+          file,
+          dirty: true,
+          editor: { getValue: jest.fn().mockReturnValue('# Coffee? Yes') },
+        });
+        app.workspace.getLeavesOfType = jest.fn().mockReturnValue([{ view }]);
+
+        await plugin.forceSyncHeadingToFilename(file);
+
+        expect(processFrontMatter).not.toHaveBeenCalled();
+      });
+
+      it('removes a stale property when filename-to-heading sync replaces the heading', async () => {
+        const { file, stored } = setup('Coffee?', { title: 'Coffee?' });
+        file.basename = 'Tea';
+        app.vault.modify = jest.fn().mockResolvedValue(undefined);
+        (plugin.settings as any).newHeadingStyle = 'Prefix';
+
+        await plugin.forceSyncFilenameToHeading(file);
+
+        expect((app.vault.modify as jest.Mock).mock.calls[0][1]).toContain(
+          '# Tea',
+        );
+        expect(stored).toEqual({});
+      });
     });
 
     it('ignores its own rename event before asynchronous handlers run', async () => {
