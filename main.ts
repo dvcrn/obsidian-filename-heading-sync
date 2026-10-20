@@ -9,7 +9,7 @@ import {
   MarkdownView,
   PluginManifest,
 } from 'obsidian';
-import { isExcluded } from './exclusions';
+import { isExcluded, isOutsideVault } from './exclusions';
 import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
@@ -277,7 +277,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   async forceSyncHeadingToFilename(file: TFile | null) {
-    if (file === null) {
+    if (file === null || isOutsideVault(file)) {
       return;
     }
 
@@ -366,7 +366,7 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   async forceSyncFilenameToHeading(file: TFile | null) {
-    if (file === null) {
+    if (file === null || isOutsideVault(file)) {
       return;
     }
 
