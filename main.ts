@@ -59,8 +59,11 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   limitFilenameLength: false,
 };
 
-/** Android and most Linux file systems allow 255 bytes per filename. */
-const maxFilenameBytes = 255;
+/**
+ * Android and most Linux file systems allow 255 bytes per filename. The rest
+ * leaves room for sync-conflict copies, e.g. Syncthing adds 38 bytes.
+ */
+const maxFilenameBytes = 200;
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
   private renamingFiles = new Set<TAbstractFile>();
@@ -910,7 +913,7 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Limit Filename Length')
       .setDesc(
-        'Keep filenames short enough for Android/Linux (255 bytes). Longer headings give a shortened filename, cut at a word boundary and marked with "…". The heading stays complete.',
+        'Keep filenames short enough for Android/Linux (255 bytes), with room for sync-conflict copies. Filenames are limited to 200 bytes; longer headings give a shortened filename, cut at a word boundary and marked with "…". The heading stays complete.',
       )
       .addToggle((toggle) =>
         toggle
