@@ -14,6 +14,7 @@ import {
   generateFilenameFromHeading,
   generateHeadingFromFilename,
   headingMatchesFilename,
+  HeadingSettings,
 } from './headings';
 
 // Must be Strings unless settings dialog is updated.
@@ -40,7 +41,7 @@ interface FilenameHeadingSyncPluginSettings {
   renameDebounceTimeout: number;
   insertHeadingIfMissing: boolean;
   spaceReplacementCharacter: string;
-  maxFilenameBytes: number;
+  limitFilenameLength: boolean;
 }
 
 const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
@@ -55,8 +56,11 @@ const DEFAULT_SETTINGS: FilenameHeadingSyncPluginSettings = {
   renameDebounceTimeout: 1000,
   insertHeadingIfMissing: true,
   spaceReplacementCharacter: '',
-  maxFilenameBytes: 0,
+  limitFilenameLength: false,
 };
+
+/** Android and most Linux file systems allow 255 bytes per filename. */
+const maxFilenameBytes = 255;
 
 export default class FilenameHeadingSyncPlugin extends Plugin {
   private renamingFiles = new Set<TAbstractFile>();
@@ -385,7 +389,11 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
 
       if (heading !== null) {
         if (
-          !headingMatchesFilename(heading.text, file.basename, this.settings)
+          !headingMatchesFilename(
+            heading.text,
+            file.basename,
+            this.headingSettings(),
+          )
         ) {
           this.replaceHeading(
             file,
@@ -484,7 +492,16 @@ export default class FilenameHeadingSyncPlugin extends Plugin {
   }
 
   sanitizeHeading(text: string) {
-    return generateFilenameFromHeading(text, this.settings);
+    return generateFilenameFromHeading(text, this.headingSettings());
+  }
+
+  headingSettings(): HeadingSettings {
+    return {
+      ...this.settings,
+      maxFilenameBytes: this.settings.limitFilenameLength
+        ? maxFilenameBytes
+        : 0,
+    };
   }
 
   /**
@@ -891,21 +908,16 @@ class FilenameHeadingSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Max Filename Length (bytes)')
+      .setName('Limit Filename Length')
       .setDesc(
-        'Shorten filenames longer than this many UTF-8 bytes, including ".md". The cut is made at a word boundary and marked with "…". Android and many sync tools allow 255 bytes; accented letters take 2 bytes or more. 0 = no limit, otherwise at least 10.',
+        'Keep filenames short enough for Android/Linux (255 bytes). Longer headings give a shortened filename, cut at a word boundary and marked with "…". The heading stays complete.',
       )
-      .addText((text) =>
-        text
-          .setPlaceholder('0')
-          .setValue(String(this.plugin.settings.maxFilenameBytes))
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.limitFilenameLength)
           .onChange(async (value) => {
-            const numValue = parseInt(value);
-            // Below 10 bytes, ".md" and "…" leave almost no room for a name.
-            if (numValue === 0 || numValue >= 10) {
-              this.plugin.settings.maxFilenameBytes = numValue;
-              await this.plugin.saveSettings();
-            }
+            this.plugin.settings.limitFilenameLength = value;
+            await this.plugin.saveSettings();
           }),
       );
 
