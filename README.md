@@ -14,6 +14,7 @@ Discussion on the obsidian forum [here](https://forum.obsidian.md/t/plugin-for-k
 - When opening a file that doesn't have a heading yet -> will insert one
 - When opening a file with a different heading than the current file name -> will update the heading
 - When updating the heading of a file -> will rename the file
+- Optional "Limit Filename Length" (200 bytes: fits the 255-byte Android/Linux limit with room for sync-conflict copies) -> long headings give a shortened filename that ends in "…", while the heading stays complete
 
 If you're not a fan of automatic renaming you can also disable the "File Save Hook" and "File Open Hook" in settings and just use the manual sync commands (thanks @mnaoumov!)
 
