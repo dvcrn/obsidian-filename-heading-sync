@@ -10,6 +10,28 @@ description = "Run the Jest test suite"
 run = "npm run build"
 description = "Build the Obsidian plugin"
 
+[tasks.release]
+description = "Bump manifest.json version, commit, tag, and push to trigger the release workflow"
+usage = 'arg "<version>" help="Semver without a v prefix, e.g. 1.11.3"'
+run = """
+set -euo pipefail
+version="${usage_version}"
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Working tree must be clean" >&2
+  exit 1
+fi
+node -e '
+const fs = require("fs");
+const m = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+m.version = process.argv[1];
+fs.writeFileSync("manifest.json", JSON.stringify(m, null, 2) + "\\n");
+' "$version"
+git add manifest.json
+git commit -m "Bump version to $version"
+git tag "$version"
+git push origin HEAD "$version"
+"""
+
 [tasks.sync]
 depends = ["build"]
 description = "Build and copy artifacts into an Obsidian plugin directory"
